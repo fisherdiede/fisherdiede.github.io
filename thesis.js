@@ -11,7 +11,7 @@ var numNews = 0
 var fontLoaded = false
 function preload() {
 	remoteImg = loadImage('assets/img/remote.jpeg')
-	titleFont = loadFont('assets/fonts/SpaceMono-BoldItalic.ttf', fontCompletion)
+	titleFont = loadFont('assets/fonts/SpaceMono-Bold.ttf', fontCompletion)
 }
 
 function fontCompletion() {
@@ -20,7 +20,7 @@ function fontCompletion() {
 
 function setup() {	
 	background(0);
-	console.log("thesis setup!")
+	console.log("thesis setup?")
 	canvas = createCanvas(windowWidth, windowHeight);
 	initUI()
 }
@@ -54,7 +54,7 @@ function calculateTitleSize() {
 		titleFontSize -= 1
 		textSize(titleFontSize)
 	}
-	console.log("calculated: ", String(titleFontSize))
+	console.log("title bounds: ", titleFont.textBounds(titleString, 0, 0, titleFontSize))
 }
 
 function drawTitle() {
@@ -62,10 +62,11 @@ function drawTitle() {
 	textFont(titleFont)
 	textSize(titleFontSize)
 	textStyle(ITALIC);
-	textAlign(CENTER);
+	textAlign(LEFT);
 	var titleRect = titleFont.textBounds(titleString, 0, 0, titleFontSize)
-	text(titleString, -titleRect.x, -titleRect.y, windowWidth*1.25, titleFontSize*2)
-	// text(titleString, 0, 0, windowWidth*1.25, titleFontSize*1.5)
+	// text(titleString, -titleRect.x, -titleRect.y, windowWidth*1.25, titleFontSize*2)
+	text(titleString, 0, 0, windowWidth*1.25, titleFontSize*1.5)
+	console.log(titleRect)
 }
 
 function drawDescription() {
