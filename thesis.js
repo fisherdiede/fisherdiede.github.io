@@ -3,8 +3,10 @@ let remoteImg;
 let descriptionString = "Real News is an interactive and ever-evolving exploration of modern news media. through the familiar interface of an on-screen TV remote, the user is presented with random samples of recent American news programming. more interaction brings more news, and eventually the user may find clarity amid the clamorous coverage. coming soon.";
 var remoteCoords = {"top":0, "bottom":0, "left":0, "right":0}
 
-var numNews = 0
+let titleString = "Real News"
+var titleFontSize;
 
+var numNews = 0
 
 function preload() {
 	remoteImg = loadImage('assets/img/remote.jpeg')
@@ -25,18 +27,31 @@ function draw() {
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
+  calculateTitleSize();
 
 }
 
 function initUI() {
 	textFont("Courier New");
 	textAlign(CENTER);
+	calculateTitleSize();
+}
+
+function calculateTitleSize() {
+	titleFontSize = 400
+	textSize(titleFontSize)
+	console.log("calculating title font size")
+	while(textWidth(titleString) > windowWidth) {
+		titleFontSize -= 1
+		textSize(titleFontSize)
+	}
+	console.log(String(titleFontSize))
 }
 
 function drawTitle() {
 	fill(255)
-	textSize(112)
-	text("Real News", 0, 112, windowWidth, 200)
+	textSize(titleFontSize)
+	text(titleString, 0, 0, windowWidth, titleFontSize*1.5)
 }
 
 function drawDescription() {
