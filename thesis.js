@@ -20,7 +20,6 @@ function draw() {
 	background(0);
 	drawTitle();
 	drawRemote();
-	drawCounter();
 	// drawDescription();
 }
 
@@ -44,12 +43,6 @@ function drawDescription() {
 	fill(255)
 	textSize(20)
 	text(descriptionString, 10, 10, windowWidth-20, windowHeight-20)
-}
-
-function drawCounter() {
-	fill(255);
-	textSize(20);
-	text(String(numNews), 0, remoteCoords["top"] - 30, windowWidth, 30)
 }
 
 function drawRemote() {
@@ -106,7 +99,7 @@ function mousePressed() {
 		mouseY >= remoteCoords["top"] &&
 		mouseY <= remoteCoords["bottom"]) {
 		numNews += 1
-		console.log("clicked remote")
+		console.log("remote clicks: ", String(numNews))
 	}
 	
   	return false
