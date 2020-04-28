@@ -12,8 +12,8 @@ title: thesis
       margin: 0;
     }
   </style>
-  <script src="../p5/p5.js"></script>
-  <script src="../p5/p5.sound.js"></script>
+  <script src="p5/p5.js"></script>
+  <script src="p5/p5.sound.js"></script>
   <script src="thesis.js"></script>
 </head>
 
