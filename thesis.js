@@ -4,11 +4,9 @@ function preload() {
 }
 
 function setup() {	
-	console.log("start setup")
+	console.log("thesis setup")
 	canvas = createCanvas(windowWidth, windowHeight);
 	initUI()
-
-	console.log("end setup")
 }
 
 function draw() {
