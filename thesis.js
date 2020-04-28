@@ -20,7 +20,7 @@ function draw() {
 	textFont("Courier New");
 	textSize(24);
 	textAlign(CENTER, CENTER);
-	text("coming soon", 0, (windowHeight/5) * 4, windowWidth, 24)
+	text("coming soon", 0, (windowHeight/3), windowWidth, 24)
 }
 
 function windowResized() {
@@ -32,11 +32,11 @@ function initUI() {
 }
 
 function drawRemote() {
-	var remoteHeight = windowHeight/5.0
+	var remoteHeight = windowHeight/3.0
 	var remoteScale = remoteHeight/remoteImg.height
 	var scaledWidth = remoteImg.width*remoteScale
 	var scaledHeight = remoteImg.height*remoteScale
-	image(remoteImg, windowWidth/2 - scaledWidth/2, 0, scaledWidth, scaledHeight);
+	image(remoteImg, windowWidth/2 - scaledWidth/2, windowHeight - scaledHeight - 5, scaledWidth, scaledHeight);
 	
 }
 
