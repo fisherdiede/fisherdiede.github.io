@@ -7,7 +7,7 @@ var remoteCoords = {"top":0, "bottom":0, "left":0, "right":0}
 var titleString = "Real News"
 var titleFontSize = 20
 
-var numNews = 0 bhujnnikm?
+var numNews = 0
 var fontLoaded = false
 function preload() {
 	remoteImg = loadImage('assets/img/remote.jpeg')
