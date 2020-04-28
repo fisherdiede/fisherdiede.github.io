@@ -52,7 +52,8 @@ function drawTitle() {
 	fill(255)
 	textSize(titleFontSize)
 	textAlign(CENTER);
-	var titleRect = textFont().textBounds(titleString, 0, 0, titleFontSize)
+	var font = textFont()
+	var titleRect = font.textBounds(titleString, 0, 0, titleFontSize)
 	text(titleString, -titleRect.x, -titleRect.y, titleRect.w, titleRect.h)
 }
 
