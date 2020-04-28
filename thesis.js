@@ -18,7 +18,7 @@ let urls = ["https://www.youtube.com/embed/xrAJuh9nM8w?start=22",
 			"https://www.youtube.com/embed/qiHMU_t3CYU?start=0",
 			"https://www.youtube.com/embed/a-wSArgKAR0?start=0",
 			"https://www.youtube.com/embed/DoAvLnh0sEo?start=0",
-			"https://www.youtube.com/embed/0Ac5u6hBkDA?start=0",
+			"https://www.youtube.com/embed/0Ac5u6hBkDA?start=78",
 			"https://www.youtube.com/embed/Y0i6IK8wcAk?start=0"]
 
 var vidIdxs = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
