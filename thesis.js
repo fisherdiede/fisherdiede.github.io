@@ -9,8 +9,22 @@ var titleFontSize = 0
 
 let numNews = 0
 var fontLoaded = false
-let urlQueryAppend = "?autoplay=1&controls=0"
-let urls = ["https://www.youtube.com/embed/ROhR0FdMWdg", "https://www.youtube.com/embed/RWu3e4r1sXU"]
+let urlQueryAppend = "&autoplay=1&controls=0"
+let urls = ["https://www.youtube.com/embed/xrAJuh9nM8w?start=22",
+			"https://www.youtube.com/embed/2ZWtdFVU904?start=55",
+			"https://www.youtube.com/embed/ROhR0FdMWdg?start=0",
+			"https://www.youtube.com/embed/RWu3e4r1sXU?start=0",
+			"https://www.youtube.com/embed/ug_Stzg_uis?start=25",
+			"https://www.youtube.com/embed/qiHMU_t3CYU?start=0",
+			"https://www.youtube.com/embed/a-wSArgKAR0?start=0",
+			"https://www.youtube.com/embed/DoAvLnh0sEo?start=0",
+			"https://www.youtube.com/embed/0Ac5u6hBkDA?start=0",
+			"https://www.youtube.com/embed/Y0i6IK8wcAk?start=0"]
+
+var vidIdxs = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+var vidIdxOrder = []
+
+// let urls = ["https://www.youtube.com/embed/ROhR0FdMWdg", "https://www.youtube.com/embed/RWu3e4r1sXU"]
 var player;
 
 function preload() {
@@ -27,6 +41,11 @@ function fontCompletion() {
 function setup() {	
 	console.log("thesis setup")
 	canvas = createCanvas(windowWidth, windowHeight);
+
+	while(vidIdxOrder.length < urls.length) {
+		var r = int(Math.random() * float(vidIdxs.length))
+		vidIdxOrder.push(vidIdxs.splice(r, 1))
+	}
 }
 
 function draw() {
@@ -34,7 +53,7 @@ function draw() {
 	if (fontLoaded && numNews == 0) {
 		// fill("#000000")
 		// rect(0,0,windowWidth, windowHeight)
-		drawTitle();
+		// drawTitle();
 	} else {
 		// fill("FF0000", 0)
 		// rect(0,0,windowWidth, windowHeight)
@@ -128,23 +147,34 @@ function mousePressed() {
 		mouseY >= remoteCoords["top"] &&
 		mouseY <= remoteCoords["bottom"]) {
 		if (numNews < urls.length) {
-			var eltID = "yt_video" + String(numNews)
+			let thisIdx = vidIdxOrder[numNews]
+			var eltID = "yt_video" + String(thisIdx)
 			
 			document.getElementById(eltID).style.display = "block";
 			
-			let theSrc = urls[numNews] + urlQueryAppend
+			let theSrc = urls[thisIdx] + urlQueryAppend
 			console.log("queueing: ", theSrc);
 			document.getElementById(eltID).src = theSrc
 			
+			numNews += 1
+
+			if (numNews == 1) {
+				document.getElementById(eltID).style.opacity = "100%"
+				document.getElementById(eltID).style.zIndex = "-2"
+			} else {
+				document.getElementById(eltID).style.zIndex = "-1"
+				adjustOpacity();
+			}
 
 			// document.getElementById("yt_video").position = 
 			// player = select("#yt_video");
 			// player.attribute('src', urls[numNews]);
 			// player.position(0,0);
+			
+			
+			console.log("remote clicks: ", String(numNews))
 		}
-		numNews += 1
-		adjustOpacity();
-		console.log("remote clicks: ", String(numNews))
+		
 	}
 	
   	return false
@@ -154,7 +184,7 @@ function adjustOpacity() {
 	var opacityValue = 1.0/numNews
 	console.log(opacityValue)
 	for (var i = 0; i < numNews; i++) {
-		var eltID = "yt_video" + String(i)
+		var eltID = "yt_video" + String(vidIdxOrder[i])
 		document.getElementById(eltID).style.opacity = opacityValue
 	}
 }
