@@ -15,7 +15,7 @@ function preload() {
 }
 
 function setup() {	
-	console.log("thesis setup")
+	console.log("thesis setups")
 	console.log(String(font))
 	canvas = createCanvas(windowWidth, windowHeight);
 	initUI()
@@ -43,7 +43,7 @@ function initUI() {
 function calculateTitleSize() {
 	titleFontSize = 400
 	textSize(titleFontSize)
-	console.log("calculating title font size 3")
+	console.log("calculating title font size")
 	while(textWidth(titleString) >= windowWidth) {
 		titleFontSize -= 1
 		textSize(titleFontSize)
