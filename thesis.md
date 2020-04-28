@@ -11,9 +11,6 @@ title: thesis
       padding: 0;
       margin: 0;
     }
-    header {
-      display: none;
-    }
   </style>
   <script src="../p5/p5.js"></script>
   <script src="../p5/p5.sound.js"></script>
