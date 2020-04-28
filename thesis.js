@@ -7,29 +7,37 @@ var remoteCoords = {"top":0, "bottom":0, "left":0, "right":0}
 var titleString = "Real News"
 var titleFontSize = 0
 
-var numNews = 0
+let numNews = 0
 var fontLoaded = false
+let urlQueryAppend = "?autoplay=1&controls=0"
+let urls = ["https://www.youtube.com/embed/ROhR0FdMWdg", "https://www.youtube.com/embed/RWu3e4r1sXU"]
+var player;
 
 function preload() {
+	console.log("preload")
 	remoteImg = loadImage('assets/img/remote.jpeg')
 	titleFont = loadFont('assets/fonts/SpaceMono-Bold.ttf', fontCompletion)
 }
 
 function fontCompletion() {
+	console.log("font completion")
 	fontLoaded = true
 }
 
 function setup() {	
-	background(0);
 	console.log("thesis setup")
 	canvas = createCanvas(windowWidth, windowHeight);
-	initUI()
 }
 
 function draw() {
-	background(0);
-	if (fontLoaded) {
+	console.log("draw")
+	if (fontLoaded && numNews == 0) {
+		// fill("#000000")
+		// rect(0,0,windowWidth, windowHeight)
 		drawTitle();
+	} else {
+		// fill("FF0000", 0)
+		// rect(0,0,windowWidth, windowHeight)
 	}
 	drawRemote();
 	// drawDescription();
@@ -39,37 +47,25 @@ function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
 }
 
-function initUI() {
-
-}
-
 function calculateTitleSize() {
-	console.log(titleFontSize)
 	titleFontSize = 400.0
 	textSize(titleFontSize)
-	console.log("calculating title font size")
 	while(textWidth(titleString) >= windowWidth) {
 		titleFontSize -= 1
 		textSize(titleFontSize)
 	}
-	console.log("title bounds: ", titleFont.textBounds(titleString, 0, 0, titleFontSize))
-}
-
-function fontCompletion() {
-	fontLoaded = true
-	// calculateTitleSize()
 }
 
 function drawTitle() {
 	calculateTitleSize()
 	textSize(titleFontSize)
-	fill(255)
+	fill(0)
 	textFont(titleFont)
 	textAlign(LEFT);
 	var titleRect = titleFont.textBounds(titleString, 0, 0, titleFontSize)
 	// text(titleString, -titleRect.x, -titleRect.y, windowWidth*1.25, titleFontSize*2)
 	text(titleString, 0, titleRect.y/2, windowWidth*1.5, titleFontSize*1.5)
-	console.log(titleRect)
+	// console.log(titleRect)
 }
 
 function drawDescription() {
@@ -79,7 +75,7 @@ function drawDescription() {
 }
 
 function drawRemote() {
-	var bottomPadding = 20
+	var bottomPadding = 20//windowHeight/2
 
 	var remoteHeight = windowHeight/3.0
 	var remoteScale = remoteHeight/remoteImg.height
@@ -131,11 +127,36 @@ function mousePressed() {
 		mouseX <= remoteCoords["right"] &&
 		mouseY >= remoteCoords["top"] &&
 		mouseY <= remoteCoords["bottom"]) {
+		if (numNews < urls.length) {
+			var eltID = "yt_video" + String(numNews)
+			
+			document.getElementById(eltID).style.display = "block";
+			
+			let theSrc = urls[numNews] + urlQueryAppend
+			console.log("queueing: ", theSrc);
+			document.getElementById(eltID).src = theSrc
+			
+
+			// document.getElementById("yt_video").position = 
+			// player = select("#yt_video");
+			// player.attribute('src', urls[numNews]);
+			// player.position(0,0);
+		}
 		numNews += 1
+		adjustOpacity();
 		console.log("remote clicks: ", String(numNews))
 	}
 	
   	return false
+}
+
+function adjustOpacity() {
+	var opacityValue = 1.0/numNews
+	console.log(opacityValue)
+	for (var i = 0; i < numNews; i++) {
+		var eltID = "yt_video" + String(i)
+		document.getElementById(eltID).style.opacity = opacityValue
+	}
 }
 
 function mouseWheel(event) {
@@ -151,5 +172,9 @@ function mouseWheel(event) {
 	// }
 	return false;
 }
+
+
+//	https://www.youtube.com/embed/ROhR0FdMWdg"
+//	https://www.youtube.com/watch?v=ROhR0FdMWdg"
 
 
