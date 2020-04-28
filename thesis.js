@@ -1,5 +1,6 @@
 var canvas;
 let remoteImg;
+let descriptionString = "Real News is an interactive and ever-evolving exploration of modern news media. through the familiar interface of an on-screen TV remote, the user is presented with random samples of recent American news programming. more interaction brings more news, and eventually the user may find clarity amid the clamorous coverage. coming soon.";
 
 function preload() {
 	remoteImg = loadImage('assets/img/remote.jpeg')
@@ -19,8 +20,8 @@ function draw() {
 	fill(255);
 	textFont("Courier New");
 	textSize(24);
-	textAlign(CENTER, CENTER);
-	text("coming soon", 0, (windowHeight/4)-12, windowWidth, 24)
+	textAlign(CENTER);
+	text(descriptionString, 10, 10, windowWidth-20, windowHeight-20)
 }
 
 function windowResized() {
