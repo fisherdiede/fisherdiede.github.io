@@ -36,7 +36,7 @@ function drawRemote() {
 	var remoteScale = remoteHeight/remoteImg.height
 	var scaledWidth = remoteImg.width*remoteScale
 	var scaledHeight = remoteImg.height*remoteScale
-	image(remoteImg, windowWidth/2 - scaledWidth/2, windowHeight - scaledHeight - 5, scaledWidth, scaledHeight);
+	image(remoteImg, windowWidth/2 - scaledWidth/2, windowHeight - scaledHeight - 20, scaledWidth, scaledHeight);
 	
 }
 
