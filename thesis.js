@@ -64,8 +64,8 @@ function drawTitle() {
 	textStyle(ITALIC);
 	textAlign(CENTER);
 	var titleRect = titleFont.textBounds(titleString, 0, 0, titleFontSize)
-	// text(titleString, -titleRect.x, -titleRect.y, titleRect.w, titleRect.h)
-	text(titleString, 0, 0, windowWidth*1.25, titleFontSize*1.5)
+	text(titleString, -titleRect.x, -titleRect.y, titleRect.w, titleRect.h)
+	// text(titleString, 0, 0, windowWidth*1.25, titleFontSize*1.5)
 }
 
 function drawDescription() {
