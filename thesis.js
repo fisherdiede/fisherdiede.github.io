@@ -11,7 +11,7 @@ function preload() {
 }
 
 function setup() {	
-	console.log("thesis setupzs")
+	console.log("thesis setup")
 	canvas = createCanvas(windowWidth, windowHeight);
 	initUI()
 }
@@ -20,10 +20,9 @@ function draw() {
 	background(0);
 	drawRemote();
 	fill(255);
-	textFont("Courier New");
-	textSize(20);
-	textAlign(CENTER);
-	text(descriptionString, 10, 10, windowWidth-20, windowHeight-20)
+	textSize(112);
+	text("Real News", 0, 112, windowWidth, 200)
+	// text(descriptionString, 10, 10, windowWidth-20, windowHeight-20)
 	text(String(numNews), 0, remoteCoords["top"] - 30, windowWidth, 30)
 }
 
@@ -33,7 +32,8 @@ function windowResized() {
 }
 
 function initUI() {
-	// drawRemote();
+	textFont("Courier New");
+	textAlign(CENTER);
 }
 
 function drawRemote() {
