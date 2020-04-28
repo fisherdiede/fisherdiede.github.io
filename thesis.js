@@ -11,12 +11,12 @@ var numNews = 0
 
 function preload() {
 	remoteImg = loadImage('assets/img/remote.jpeg')
-	font = loadFont('/assets/fonts/space-mono/SpaceMono-Regular.ttf')
+	font = loadFont('https://www.fontsquirrel.com/fonts/download/space-mono/SpaceMono-BoldItalic.ttf')
 }
 
 function setup() {	
-	console.log("thesis setups")
-	console.log(String(font))
+	console.log("thesis setup")
+	console.log(font)
 	canvas = createCanvas(windowWidth, windowHeight);
 	initUI()
 }
@@ -56,7 +56,8 @@ function drawTitle() {
 	textSize(titleFontSize)
 	textAlign(CENTER);
 	var titleRect = font.textBounds(titleString, 0, 0, titleFontSize)
-	text(titleString, -titleRect.x, -titleRect.y, titleRect.w, titleRect.h)
+	// text(titleString, -titleRect.x, -titleRect.y, titleRect.w, titleRect.h)
+	text(titleString, 0, 0, windowWidth*1.25, titleFontSize*1.5)
 }
 
 function drawDescription() {
