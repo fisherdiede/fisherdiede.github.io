@@ -4,20 +4,18 @@ function preload() {
 }
 
 function setup() {	
-	console.log("start setup")
+	console.log("homepage setup")
 	canvas = createCanvas(windowWidth, windowHeight);
 	initUI()
-
-	console.log("end setup")
 }
 
 function draw() {
 	background(0);
-	fill(255);
+	fill(mouseY/windowHeight);
 	textFont("Courier New");
 	textSize(24);
 	textAlign(CENTER, CENTER);
-	text("home", 0, (windowHeight/2) - 12, windowWidth, 24)
+	text("welcome", 0, (windowHeight/2) - 12, windowWidth, 24)
 }
 
 function windowResized() {

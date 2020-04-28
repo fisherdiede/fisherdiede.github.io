@@ -4,7 +4,7 @@ function preload() {
 }
 
 function setup() {	
-	console.log("thesis setup 1")
+	console.log("thesis setup")
 	canvas = createCanvas(windowWidth, windowHeight);
 	initUI()
 }
@@ -15,7 +15,7 @@ function draw() {
 	textFont("Courier New");
 	textSize(24);
 	textAlign(CENTER, CENTER);
-	text("this page is currently under development", 0, (windowHeight/2) - 12, windowWidth, 24)
+	text("coming soon", 0, (windowHeight/2) - 12, windowWidth, 24)
 }
 
 function windowResized() {
