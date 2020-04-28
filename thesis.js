@@ -86,7 +86,7 @@ function mousePressed() {
 	// }
 
 	if (mouseX >= remoteCoords["left"] && 
-		mousex <= remoteCoords["right"] &&
+		mouseX <= remoteCoords["right"] &&
 		mouseY >= remoteCoords["top"] &&
 		mouseY <= remoteCoords["bottom"]) {
 		numNews += 1
