@@ -5,13 +5,13 @@ let descriptionString = "Real News is an interactive and ever-evolving explorati
 var remoteCoords = {"top":0, "bottom":0, "left":0, "right":0}
 
 var titleString = "Real News"
-var titleFontSize;
+var titleFontSize = 20
 
-var numNews = 0
+var numNews = 0 bhujnnikm?
 var fontLoaded = false
 function preload() {
 	remoteImg = loadImage('assets/img/remote.jpeg')
-	titleFont = loadFont('assets/fonts/SpaceMono-Bold.ttf', fontCompletion)
+	titleFont = loadFont('assets/fonts/SpaceMono-BoldItalic.ttf', fontCompletion)
 }
 
 function fontCompletion() {
@@ -21,17 +21,17 @@ function fontCompletion() {
 
 function setup() {	
 	background(0);
-	console.log("thesis setup?!!")
+	console.log("thesis setup")
 	canvas = createCanvas(windowWidth, windowHeight);
-	if (fontLoaded) {
-		calculateTitleSize()
-	}
 	initUI()
 }
 
 function draw() {
 	background(0);
 	if (fontLoaded) {
+		// if (titleFontSize == 20) {
+		// 	calculateTitleSize()
+		// }
 		drawTitle();
 	}
 	drawRemote();
@@ -41,7 +41,6 @@ function draw() {
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
   calculateTitleSize();
-
 }
 
 function initUI() {
