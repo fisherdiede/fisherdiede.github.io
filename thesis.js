@@ -16,7 +16,7 @@ function preload() {
 
 function fontCompletion() {
 	fontLoaded = true
-	calculateTitleSize();
+	calculateTitleSize()
 }
 
 function setup() {	
@@ -55,6 +55,11 @@ function calculateTitleSize() {
 		textSize(titleFontSize)
 	}
 	console.log("title bounds: ", titleFont.textBounds(titleString, 0, 0, titleFontSize))
+}
+
+function fontCompletion() {
+	fontLoaded = true
+	calculateTitleSize()
 }
 
 function drawTitle() {
