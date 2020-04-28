@@ -42,8 +42,6 @@ function windowResized() {
 }
 
 function initUI() {
-	// textFont("Courier New");
-	textAlign(CENTER);
 }
 
 function calculateTitleSize() {
