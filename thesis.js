@@ -20,7 +20,7 @@ function fontCompletion() {
 
 function setup() {	
 	background(0);
-	console.log("thesis setup?")
+	console.log("thesis setup?!!")
 	canvas = createCanvas(windowWidth, windowHeight);
 	initUI()
 }
@@ -61,7 +61,6 @@ function drawTitle() {
 	fill(255)
 	textFont(titleFont)
 	textSize(titleFontSize)
-	textStyle(ITALIC);
 	textAlign(LEFT);
 	var titleRect = titleFont.textBounds(titleString, 0, 0, titleFontSize)
 	// text(titleString, -titleRect.x, -titleRect.y, windowWidth*1.25, titleFontSize*2)
