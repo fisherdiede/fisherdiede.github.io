@@ -10,7 +10,6 @@ var titleFontSize;
 var numNews = 0
 var fontLoaded = false
 function preload() {
-	background(0);
 	remoteImg = loadImage('assets/img/remote.jpeg')
 	titleFont = loadFont('assets/fonts/SpaceMono-BoldItalic.ttf', fontCompletion)
 }
