@@ -20,7 +20,7 @@ function draw() {
 	textFont("Courier New");
 	textSize(24);
 	textAlign(CENTER, CENTER);
-	text("coming soon", 0, (windowHeight/3), windowWidth, 24)
+	text("coming soon", 0, (windowHeight/4)-12, windowWidth, 24)
 }
 
 function windowResized() {
