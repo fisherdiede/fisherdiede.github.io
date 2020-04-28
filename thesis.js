@@ -18,12 +18,10 @@ function setup() {
 
 function draw() {
 	background(0);
+	drawTitle();
 	drawRemote();
-	fill(255);
-	textSize(112);
-	text("Real News", 0, 112, windowWidth, 200)
-	// text(descriptionString, 10, 10, windowWidth-20, windowHeight-20)
-	text(String(numNews), 0, remoteCoords["top"] - 30, windowWidth, 30)
+	drawCounter();
+	// drawDescription();
 }
 
 function windowResized() {
@@ -34,6 +32,24 @@ function windowResized() {
 function initUI() {
 	textFont("Courier New");
 	textAlign(CENTER);
+}
+
+function drawTitle() {
+	fill(255)
+	textSize(112)
+	text("Real News", 0, 112, windowWidth, 200)
+}
+
+function drawDescription() {
+	fill(255)
+	textSize(20)
+	text(descriptionString, 10, 10, windowWidth-20, windowHeight-20)
+}
+
+function drawCounter() {
+	fill(255);
+	textSize(20);
+	text(String(numNews), 0, remoteCoords["top"] - 30, windowWidth, 30)
 }
 
 function drawRemote() {
