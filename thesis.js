@@ -1,6 +1,10 @@
 var canvas;
 let remoteImg;
 let descriptionString = "Real News is an interactive and ever-evolving exploration of modern news media. through the familiar interface of an on-screen TV remote, the user is presented with random samples of recent American news programming. more interaction brings more news, and eventually the user may find clarity amid the clamorous coverage. coming soon.";
+var remoteCoords = {"top":0, "bottom":0, "left":0, "right":0}
+
+var numNews = 0
+
 
 function preload() {
 	remoteImg = loadImage('assets/img/remote.jpeg')
@@ -14,31 +18,38 @@ function setup() {
 
 function draw() {
 	background(0);
-	
 	drawRemote();
-
 	fill(255);
 	textFont("Courier New");
 	textSize(20);
 	textAlign(CENTER);
 	text(descriptionString, 10, 10, windowWidth-20, windowHeight-20)
+	text(String(numNews), 0, remoteCoords["top"] - 30, windowWidth, 30)
 }
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
+
 }
 
 function initUI() {
-	
+	// drawRemote();
 }
 
 function drawRemote() {
+	var bottomPadding = 20
+
 	var remoteHeight = windowHeight/3.0
 	var remoteScale = remoteHeight/remoteImg.height
 	var scaledWidth = remoteImg.width*remoteScale
 	var scaledHeight = remoteImg.height*remoteScale
-	image(remoteImg, windowWidth/2 - scaledWidth/2, windowHeight - scaledHeight - 20, scaledWidth, scaledHeight);
-	
+
+	remoteCoords["bottom"] =  windowHeight - bottomPadding
+	remoteCoords["top"] = remoteCoords["bottom"] - scaledHeight
+	remoteCoords["left"] = windowWidth/2 - scaledWidth/2
+	remoteCoords["right"] = remoteCoords["left"] + scaledWidth
+
+	image(remoteImg, remoteCoords["left"], remoteCoords["top"], scaledWidth, scaledHeight);
 }
 
 // window.onresize = function() {
@@ -73,6 +84,13 @@ function mousePressed() {
 	// 	// Pick new random color values
 	// 	circleColor = colors[Math.random(colors.length)];
 	// }
+
+	if (mouseX >= remoteCoords["left"] && 
+		mousex <= remoteCoords["right"] &&
+		mouseY >= remoteCoords["top"] &&
+		mouseY <= remoteCoords["bottom"]) {
+		numNews += 1
+	}
 	
   	return false
 }
