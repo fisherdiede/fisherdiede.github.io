@@ -16,6 +16,7 @@ function preload() {
 
 function fontCompletion() {
 	fontLoaded = true
+	calculateTitleSize();
 }
 
 function setup() {	
@@ -43,7 +44,6 @@ function windowResized() {
 function initUI() {
 	// textFont("Courier New");
 	textAlign(CENTER);
-	calculateTitleSize();
 }
 
 function calculateTitleSize() {
