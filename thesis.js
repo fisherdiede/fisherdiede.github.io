@@ -4,7 +4,7 @@ function preload() {
 }
 
 function setup() {	
-	console.log("thesis setup")
+	console.log("thesis setup 0")
 	canvas = createCanvas(windowWidth, windowHeight);
 	initUI()
 }
