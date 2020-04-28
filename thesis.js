@@ -40,8 +40,8 @@ function initUI() {
 function calculateTitleSize() {
 	titleFontSize = 400
 	textSize(titleFontSize)
-	console.log("calculating title font size 1")
-	while(textWidth(titleString) >= windowWidth) {
+	console.log("calculating title font size 5")
+	while(textWidth(titleString) > windowWidth - 5) {
 		titleFontSize -= 1
 		textSize(titleFontSize)
 	}
