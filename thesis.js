@@ -11,7 +11,7 @@ function preload() {
 }
 
 function setup() {	
-	console.log("thesis setup")
+	console.log("thesis setupzs")
 	canvas = createCanvas(windowWidth, windowHeight);
 	initUI()
 }
@@ -90,6 +90,7 @@ function mousePressed() {
 		mouseY >= remoteCoords["top"] &&
 		mouseY <= remoteCoords["bottom"]) {
 		numNews += 1
+		console.log("clicked remote")
 	}
 	
   	return false
