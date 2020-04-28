@@ -11,7 +11,7 @@ var numNews = 0
 
 function preload() {
 	remoteImg = loadImage('assets/img/remote.jpeg')
-	font = loadFont('./assets/fonts/SpaceMono-Regular.ttf')
+	font = loadFont('./assets/fonts/space-mono/SpaceMono-Regular.ttf')
 }
 
 function setup() {	
