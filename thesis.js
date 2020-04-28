@@ -45,13 +45,13 @@ function calculateTitleSize() {
 		titleFontSize -= 1
 		textSize(titleFontSize)
 	}
-	console.log(String(titleFontSize))
+	console.log("window width: ", String(windowWidth), " | font size: ", String(titleFontSize))
 }
 
 function drawTitle() {
 	fill(255)
 	textSize(titleFontSize)
-	text(titleString, 0, 0, textWidth(titleString), titleFontSize*1.5)
+	text(titleString, -100, 0, windowWidth + 200, titleFontSize*1.5)
 }
 
 function drawDescription() {
