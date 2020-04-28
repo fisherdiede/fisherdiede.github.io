@@ -10,11 +10,13 @@ var titleFontSize;
 var numNews = 0
 
 function preload() {
+	background(0);
 	remoteImg = loadImage('assets/img/remote.jpeg')
 	titleFont = loadFont('assets/fonts/SpaceMono-BoldItalic.ttf')
 }
 
 function setup() {	
+	background(0);
 	console.log("thesis setup!")
 	canvas = createCanvas(windowWidth, windowHeight);
 	initUI()
@@ -54,7 +56,7 @@ function drawTitle() {
 	fill(255)
 	textFont(titleFont)
 	textSize(titleFontSize)
-	textStyle(BOLDITALIC);
+	textStyle(ITALIC);
 	textAlign(CENTER);
 	var titleRect = titleFont.textBounds(titleString, 0, 0, titleFontSize)
 	// text(titleString, -titleRect.x, -titleRect.y, titleRect.w, titleRect.h)
