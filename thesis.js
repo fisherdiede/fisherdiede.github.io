@@ -65,7 +65,7 @@ function drawTitle() {
 	textAlign(LEFT);
 	var titleRect = titleFont.textBounds(titleString, 0, 0, titleFontSize)
 	// text(titleString, -titleRect.x, -titleRect.y, windowWidth*1.25, titleFontSize*2)
-	text(titleString, 0, 0, windowWidth*1.25, titleFontSize*1.5)
+	text(titleString, 0, -titleFontSize/4, windowWidth*1.5, titleFontSize*1.5)
 	console.log(titleRect)
 }
 
