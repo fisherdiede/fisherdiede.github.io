@@ -40,7 +40,7 @@ function initUI() {
 function calculateTitleSize() {
 	titleFontSize = 400
 	textSize(titleFontSize)
-	console.log("calculating title font size")
+	console.log("calculating title font size 1")
 	while(textWidth(titleString) >= windowWidth) {
 		titleFontSize -= 1
 		textSize(titleFontSize)
@@ -52,7 +52,7 @@ function drawTitle() {
 	fill(255)
 	textSize(titleFontSize)
 	textAlign(CENTER);
-	text(titleString, -titleFontSize/5, -titleFontSize/5, windowWidth + titleFontSize, titleFontSize*1.5)
+	text(titleString, 0, 0, windowWidth + titleFontSize, titleFontSize*1.5)
 }
 
 function drawDescription() {
