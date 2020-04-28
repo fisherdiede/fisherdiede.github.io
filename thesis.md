@@ -1,7 +1,6 @@
 ---
 title: thesis
 ---
-<!DOCTYPE html>
 <html lang="">
 <head>
   <meta charset="utf-8">
@@ -11,6 +10,9 @@ title: thesis
     body {
       padding: 0;
       margin: 0;
+    }
+    header {
+      display: none;
     }
   </style>
   <script src="../p5/p5.js"></script>
