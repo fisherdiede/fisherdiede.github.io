@@ -1,10 +1,24 @@
 ---
-title: This will be used as the title-tag of the page head
+title: thesis
 ---
+<!DOCTYPE html>
+<html lang="">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>thesis</title>
+  <style>
+    body {
+      padding: 0;
+      margin: 0;
+    }
+  </style>
+  <script src="../p5/p5.js"></script>
+  <script src="../p5/p5.sound.js"></script>
+  <script src="thesis.js"></script>
+</head>
 
-# This is a H1
+<body>
+</body>
 
-[the clickable text](http://xlson.com/)
-
-* Bullet lists are also easy to create
-* One more
+</html>
