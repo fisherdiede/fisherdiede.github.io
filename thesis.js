@@ -52,7 +52,7 @@ function drawTitle() {
 	fill(255)
 	textSize(titleFontSize)
 	textAlign(CENTER);
-	text(titleString, -50, -titleFontSize/4, windowWidth + 100, titleFontSize*1.5)
+	text(titleString, 0, -textAscent(), windowWidth + 100, titleFontSize*1.5)
 }
 
 function drawDescription() {
