@@ -8,11 +8,15 @@ var titleString = "Real News"
 var titleFontSize;
 
 var numNews = 0
-
+var fontLoaded = false
 function preload() {
 	background(0);
 	remoteImg = loadImage('assets/img/remote.jpeg')
-	titleFont = loadFont('assets/fonts/SpaceMono-BoldItalic.ttf')
+	titleFont = loadFont('assets/fonts/SpaceMono-BoldItalic.ttf', fontCompletion)
+}
+
+function fontCompletion() {
+	fontLoaded = true
 }
 
 function setup() {	
@@ -24,7 +28,9 @@ function setup() {
 
 function draw() {
 	background(0);
-	drawTitle();
+	if (fontLoaded) {
+		drawTitle();
+	}
 	drawRemote();
 	// drawDescription();
 }
@@ -54,7 +60,7 @@ function calculateTitleSize() {
 
 function drawTitle() {
 	fill(255)
-	// textFont(titleFont)
+	textFont(titleFont)
 	textSize(titleFontSize)
 	textStyle(ITALIC);
 	textAlign(CENTER);
