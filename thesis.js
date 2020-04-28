@@ -19,7 +19,7 @@ function draw() {
 
 	fill(255);
 	textFont("Courier New");
-	textSize(24);
+	textSize(14);
 	textAlign(CENTER);
 	text(descriptionString, 10, 10, windowWidth-20, windowHeight-20)
 }
