@@ -11,7 +11,7 @@ function setup() {
 
 function draw() {
 	background(0);
-	fill(mouseY/windowHeight);
+	fill(Math.floor((mouseY/windowHeight)*255.0));
 	textFont("Courier New");
 	textSize(24);
 	textAlign(CENTER, CENTER);
