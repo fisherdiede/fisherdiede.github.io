@@ -11,11 +11,11 @@ var numNews = 0
 
 function preload() {
 	remoteImg = loadImage('assets/img/remote.jpeg')
-	font = loadFont('https://www.fontsquirrel.com/fonts/download/space-mono/SpaceMono-BoldItalic.ttf')
+	font = loadFont('assets/fonts/SpaceMono-BoldItalic.ttf')
 }
 
 function setup() {	
-	console.log("thesis setup")
+	console.log("thesis setup!")
 	console.log(font)
 	canvas = createCanvas(windowWidth, windowHeight);
 	initUI()
