@@ -1,6 +1,8 @@
 var canvas;
+let remoteImg;
+
 function preload() {
-	
+	remoteImg = loadImage('assets/img/remote.jpeg')
 }
 
 function setup() {	
@@ -11,11 +13,14 @@ function setup() {
 
 function draw() {
 	background(0);
+	
+	drawRemote();
+
 	fill(255);
 	textFont("Courier New");
 	textSize(24);
 	textAlign(CENTER, CENTER);
-	text("coming soon", 0, (windowHeight/2) - 12, windowWidth, 24)
+	text("coming soon", 0, (windowHeight/5) * 4, windowWidth, 24)
 }
 
 function windowResized() {
@@ -23,6 +28,15 @@ function windowResized() {
 }
 
 function initUI() {
+	
+}
+
+function drawRemote() {
+	var remoteHeight = windowHeight/5.0
+	var remoteScale = remoteHeight/remoteImg.height
+	var scaledWidth = remoteImg.width*remoteScale
+	var scaledHeight = remoteImg.height*remoteScale
+	image(remoteImg, windowWidth/2 - scaledWidth/2, 0, scaledWidth, scaledHeight);
 	
 }
 
