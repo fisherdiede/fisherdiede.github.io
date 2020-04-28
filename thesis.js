@@ -16,13 +16,16 @@ function preload() {
 
 function fontCompletion() {
 	fontLoaded = true
-	calculateTitleSize()
+	// calculateTitleSize()
 }
 
 function setup() {	
 	background(0);
 	console.log("thesis setup?!!")
 	canvas = createCanvas(windowWidth, windowHeight);
+	if (fontLoaded) {
+		calculateTitleSize()
+	}
 	initUI()
 }
 
