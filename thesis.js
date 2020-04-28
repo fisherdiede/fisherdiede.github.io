@@ -54,7 +54,7 @@ function calculateTitleSize() {
 
 function drawTitle() {
 	fill(255)
-	textFont(titleFont)
+	// textFont(titleFont)
 	textSize(titleFontSize)
 	textStyle(ITALIC);
 	textAlign(CENTER);
