@@ -39,6 +39,8 @@ var vidIdxOrder = []
 // let urls = ["https://www.youtube.com/embed/ROhR0FdMWdg", "https://www.youtube.com/embed/RWu3e4r1sXU"]
 var player;
 
+let offSample;
+
 function preload() {
 	console.log("preload")
 	remoteImg = loadImage('assets/img/remote.png')
@@ -54,6 +56,7 @@ function setup() {
 	console.log("thesis setup")
 	canvas = createCanvas(windowWidth, windowHeight);
 	randomizeVideoOrder();
+	offSample = loadSound('assets/audio/tv_off.wav');
 	background(0)
 }
 
@@ -75,7 +78,7 @@ function windowResized() {
 function calculateTitleSize() {
 	titleFontSize = 400.0
 	textSize(titleFontSize)
-	while(textWidth(titleString) >= windowWidth) {
+	while(textWidth(titleString) >= windowWidth + titleFontSize/6) {
 		titleFontSize -= 1
 		textSize(titleFontSize)
 	}
@@ -88,10 +91,11 @@ function drawTitle() {
 	calculateTitleSize()
 	textSize(titleFontSize)
 	var titleRect = titleFont.textBounds(titleString, 0, 0, titleFontSize)
-	text(titleString, 0, titleRect.y/2, windowWidth*1.5, titleFontSize*1.5)
+	text(titleString, -titleFontSize/16, titleRect.y/2 - titleFontSize/16, windowWidth*1.5, titleFontSize*1.5)
 	if (numResets == 0) {
+		textAlign(CENTER);
 		textSize(20)
-		text(descriptionString, 10, titleRect.h+25 , windowWidth-20, windowHeight-titleRect.h+25)
+		text(descriptionString, 0, titleRect.h+20 , windowWidth, windowHeight-titleRect.h+25)
 	}
 	// console.log(titleRect)
 }
@@ -164,7 +168,8 @@ function mousePressed() {
 			randomizeVideoOrder()
 			numNews = 0
 			numResets += 1
-			sleep(2000)
+			offSample.play();
+			sleep(3000)
 		} else if (numNews < urls.length) {
 			let thisIdx = vidIdxOrder[numNews]
 			var eltID = "yt_video" + String(thisIdx)
