@@ -1,7 +1,7 @@
 var canvas;
 let titleFont;
 let remoteImg;
-let descriptionString = "Real News is an interactive and ever-evolving exploration of modern news media. through the familiar interface of an on-screen TV remote, the user is presented with random samples of recent American news programming. more interaction brings more news, and eventually the user may find clarity amid the clamorous coverage.";
+let descriptionString = "an interactive and ever-evolving exploration of modern news media. through the familiar interface of an on-screen TV remote, the user is presented with random samples of recent American news programming. more interaction brings more news, and eventually the user may find clarity amid the clamorous coverage.";
 var remoteCoords = {"top":0, "bottom":0, "left":0, "right":0}
 
 var titleString = "Real News"
