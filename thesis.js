@@ -12,7 +12,7 @@ let numRemoteClicks = 0
 let numResets = 0
 
 var fontLoaded = false
-let urlQueryAppend = "&autoplay=1&controls=0"
+let urlQueryAppend = "&autoplay=1&controls=0&muted=1"
 let urls = ["https://www.youtube.com/embed/xrAJuh9nM8w",
 			"https://www.youtube.com/embed/2ZWtdFVU904",
 			"https://www.youtube.com/embed/ROhR0FdMWdg",
