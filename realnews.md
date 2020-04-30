@@ -1,7 +1,7 @@
 ---
 title: RealNews
 redirect_from:
-  - /post/realnews
+  - /RealNews
 ---
 <html lang="">
 <head>
@@ -15,7 +15,7 @@ redirect_from:
   </style>
   <script src="p5/p5.js"></script>
   <script src="p5/p5.sound.js"></script>
-  <script src="RealNews.js"></script>
+  <script src="realnews.js"></script>
 </head>
 
 <body>

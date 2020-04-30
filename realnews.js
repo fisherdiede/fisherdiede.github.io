@@ -1,7 +1,7 @@
-var canvas;
-let titleFont;
-let remoteImg;
-let descriptionString = "an interactive and ever-evolving exploration of modern news media. through the familiar interface of an on-screen TV remote, the user is presented with random samples of recent American news programming. more interaction brings more news, and eventually the user may find clarity amid the clamorous coverage.";
+var canvas
+let titleFont
+let remoteImg
+let descriptionString = "an interactive and ever-evolving exploration of modern news media. through the familiar interface of an on-screen TV remote, the user is presented with random samples of recent American news programming. more interaction brings more news, and eventually the user may find clarity amid the clamorous coverage."
 var remoteCoords = {"top":0, "bottom":0, "left":0, "right":0}
 
 var titleString = "RealNews"
@@ -115,26 +115,23 @@ var vidIdxs = []
 var vidIdxOrder = []
 
 // let urls = ["https://www.youtube.com/embed/ROhR0FdMWdg", "https://www.youtube.com/embed/RWu3e4r1sXU"]
-var player;
+var player
 
-let offSample;
+let offSample
 
 function preload() {
-	console.log("preload")
 	remoteImg = loadImage('assets/img/remote.png')
 	titleFont = loadFont('assets/fonts/SpaceMono-Bold.ttf', fontCompletion)
 }
 
 function fontCompletion() {
-	console.log("font completion")
 	fontLoaded = true
 }
 
 function setup() {	
-	console.log("thesis setup")
-	canvas = createCanvas(windowWidth, windowHeight);
-	randomizeVideoOrder();
-	offSample = loadSound('assets/audio/tv_off.wav');
+	canvas = createCanvas(windowWidth, windowHeight)
+	randomizeVideoOrder()
+	offSample = loadSound('assets/audio/tv_off.wav')
 	background(0)
 	if( /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ) {
  		mobile = true
@@ -148,16 +145,18 @@ function setup() {
 function draw() {
 	console.log("draw")
 	if (numNews == 0) {
-		background(0);
+		background(0)
 		if (fontLoaded) {
-			drawTitle();
+			drawTitle()
 		}
 	}
-	drawRemote();	
+	if (!mobile) {
+		drawRemote()
+	}
 }
 
 function windowResized() {
-  resizeCanvas(windowWidth, windowHeight);
+  resizeCanvas(windowWidth, windowHeight)
 }
 
 function calculateTitleSize() {
@@ -172,13 +171,13 @@ function calculateTitleSize() {
 function drawTitle() {
 	fill(255)
 	textFont(titleFont)
-	textAlign(LEFT);
+	textAlign(LEFT)
 	calculateTitleSize()
 	textSize(titleFontSize)
 	var titleRect = titleFont.textBounds(titleString, 0, 0, titleFontSize)
 	text(titleString, -titleFontSize/16, titleRect.y/2 - titleFontSize/16, windowWidth*1.5, titleFontSize*1.5)
 	if (numResets == 0) {
-		textAlign(CENTER);
+		textAlign(CENTER)
 		textSize(20)
 		text(descriptionString, 0, titleRect.h+20 , windowWidth, windowHeight-titleRect.h+25)
 	}
@@ -199,7 +198,7 @@ function drawRemote() {
 	remoteCoords["left"] = windowWidth/2 - scaledWidth/2
 	remoteCoords["right"] = remoteCoords["left"] + scaledWidth
 
-	image(remoteImg, remoteCoords["left"], remoteCoords["top"], scaledWidth, scaledHeight);
+	image(remoteImg, remoteCoords["left"], remoteCoords["top"], scaledWidth, scaledHeight)
 }
 
 function resetVideos() {
@@ -211,13 +210,13 @@ function resetVideos() {
 	// 	document.getElementById(eltID).style.display = "none"
 	// 	document.getElementById(eltID).src = ""
 	// }
-	var videos = document.getElementById("videos");
+	var videos = document.getElementById("videos")
 	videos.innerHTML = ""
 }
 
 function randomizeVideoOrder() {
 	for (var i = 0; i < urls.length; i++) {
-		vidIdxs.push(i);
+		vidIdxs.push(i)
 	}
 	vidIdxOrder = []
 	while(vidIdxOrder.length < urls.length) {
@@ -227,22 +226,14 @@ function randomizeVideoOrder() {
 }
 
 function getRandomInt(min, max) {
-    min = Math.ceil(min);
-    max = Math.floor(max);
-    return Math.floor(Math.random() * (max - min + 1)) + min;
+    min = Math.ceil(min)
+    max = Math.floor(max)
+    return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise(resolve => setTimeout(resolve, ms))
 }
-
-// window.onresize = function() {
-// 	var w = windowWidth;
-// 	var h = windowHeight;  
-// 	canvas.size(w,h);
-// 	width = w;
-// 	height = h;
-// };
 
 function mousePressed() {
 	if (!mobile) {
@@ -278,57 +269,32 @@ function adjustOpacity() {
 }
 
 function spawnVideo() {
-	var newElt = document.createElement("iframe");
+	var newElt = document.createElement("iframe")
 
 	let thisIdx = vidIdxOrder[numNews]
 	var eltID = "video" + String(thisIdx)
 	newElt.id = eltID
 	let vidStartTime = getRandomInt(videoStartRanges[thisIdx][0],videoStartRanges[thisIdx][1])
 	let videoSrc = urlBase + urls[thisIdx] + "?start=" + String(vidStartTime) + urlQueryAppend
-	newElt.setAttribute("src", videoSrc);
-	console.log("queueing: ", newElt.src);
+	newElt.setAttribute("src", videoSrc)
+	console.log("queueing: ", newElt.src)
 
 	// newElt.style.width = 
 	newElt.style.cssText = "position: fixed; display: block; width: 100%; height: 100%; top: 0; left: 0;right: 0; bottom: 0; background-color: rgba(0,0,0,0); "
 
-	var videos = document.getElementById("videos");
+	var videos = document.getElementById("videos")
 	// var template = "<iframe id=\"" + eltID + "\" style=\"" + styleString + "\" allow=\"autoplay\" src=\"" + videoSrc +  "\"></iframe>"	
-	videos.appendChild(newElt);
+	videos.appendChild(newElt)
 
 	if (numNews == 0) {
-		canvas = createCanvas(windowWidth, windowHeight);
+		canvas = createCanvas(windowWidth, windowHeight)
 		newElt.style.cssText += "opacity: 100%; "
 		newElt.style.cssText += "z-index: -2; "
 	} else {
 		newElt.style.cssText += "opacity: " + String(100.0/(numNews+1)) + "%; "
 		newElt.style.cssText += "z-index: -1; "
-		// adjustOpacity();
+		// adjustOpacity()
 	}
-
-	
-	// let thisIdx = vidIdxOrder[numNews]
-	// var eltID = "video" + String(thisIdx)
-	
-	// let vidStartTime = getRandomInt(videoStartRanges[thisIdx][0],videoStartRanges[thisIdx][1])
-	// let videoSrc = urlBase + urls[thisIdx] + "?start=" + String(vidStartTime) + urlQueryAppend
-	// console.log("queueing: ", videoSrc);
-
-	// var styleString = "position: fixed; display: block; width: 100%; height: 100%; top: 0; left: 0;right: 0; bottom: 0; background-color: rgba(0,0,0,0); "
-	// // elt.style.cssText =
-	// if (numNews == 0) {
-	// 	canvas = createCanvas(windowWidth, windowHeight);
-	// 	styleString += "opacity: 100%; "
-	// 	styleString += "z-index: -2; "
-	// } else {
-	// 	styleString += "z-index: -1; "
-	// 	adjustOpacity();
-	// }
-	
-	// var videos = document.getElementById("videos");
-	// var template = "<iframe id=\"" + eltID + "\" style=\"" + styleString + "\" allow=\"autoplay\" src=\"" + videoSrc +  "\"></iframe>"
-	// console.log("template:\n", template)
-	// videos.innerHTML = videos.innerHTML + template;
-	// console.log("inner:\n", videos.innerHTML)
 }
 
 function mouseWheel(event) {
@@ -342,7 +308,7 @@ function mouseWheel(event) {
 	// 		updateVolume(numFirstCol()+bin, event.delta)    
 	// 	}
 	// }
-	return false;
+	return false
 }
 
 
