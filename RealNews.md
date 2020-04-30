@@ -1,11 +1,12 @@
 ---
 title: RealNews
+redirect_from:
+  - /post/realnews
 ---
 <html lang="">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RealNews</title>
   <style>
     body {
       padding: 0;

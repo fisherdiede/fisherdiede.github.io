@@ -15,6 +15,8 @@ var fontLoaded = false
 let urlBase = "https://www.youtube.com/embed/"
 let urlQueryAppend = "&autoplay=1&controls=0&muted=1"
 
+let mobile = false
+
 let urls = ["xrAJuh9nM8w", //04.28.2020 President Trump on small business support amid coronavirus | USA TODAY
 			"2ZWtdFVU904", //02.27.2020 Trump Gives 'Incoherent' Briefing On Coronavirus, Contradicts CDC - Day That Was | Rachel Maddow - MSNBC
 			"ROhR0FdMWdg", //04.28.2020 Watch Full Coronavirus Coverage - April 28 | NBC News Now
@@ -134,6 +136,13 @@ function setup() {
 	randomizeVideoOrder();
 	offSample = loadSound('assets/audio/tv_off.wav');
 	background(0)
+	if( /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ) {
+ 		mobile = true
+ 		console.log("on mobile")
+	} else {
+		mobile = false
+		console.log("not on mobile")
+	}
 }
 
 function draw() {
@@ -236,21 +245,23 @@ function sleep(ms) {
 // };
 
 function mousePressed() {
-	if (mouseX >= remoteCoords["left"] && 
-		mouseX <= remoteCoords["right"] &&
-		mouseY >= remoteCoords["top"] &&
-		mouseY <= remoteCoords["bottom"]) {
-		numRemoteClicks += 1
-		if ((Math.random() < Math.pow(0.5, numResets)) && numNews > 0) {
-			resetVideos()
-			randomizeVideoOrder()
-			numNews = 0
-			numResets += 1
-			offSample.play()
-			sleep(3000)
-		} else if (numNews < urls.length) {
-			spawnVideo()
-			numNews++
+	if (!mobile) {
+		if (mouseX >= remoteCoords["left"] && 
+			mouseX <= remoteCoords["right"] &&
+			mouseY >= remoteCoords["top"] &&
+			mouseY <= remoteCoords["bottom"]) {
+			numRemoteClicks += 1
+			if ((Math.random() < Math.pow(0.5, numResets)) && numNews > 0) {
+				resetVideos()
+				randomizeVideoOrder()
+				numNews = 0
+				numResets += 1
+				offSample.play()
+				sleep(3000)
+			} else if (numNews < urls.length) {
+				spawnVideo()
+				numNews++
+			}
 		}
 	}
 	
