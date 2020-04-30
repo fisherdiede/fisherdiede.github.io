@@ -135,10 +135,9 @@ function setup() {
 	background(0)
 	if( /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ) {
  		mobile = true
- 		console.log("on mobile")
+ 		descriptionString += "\n\nthis experience is not currently supported on mobile devices"
 	} else {
 		mobile = false
-		console.log("not on mobile")
 	}
 }
 
