@@ -1,7 +1,7 @@
 ---
 title: RealNews
 redirect_from:
-  - /RealNews
+  <!-- - /RealNews -->
 ---
 <html lang="">
 <head>
