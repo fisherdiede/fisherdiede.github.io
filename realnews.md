@@ -14,7 +14,6 @@ redirect_from:
       margin: 0;
     }
   </style>
-  <script src="https://apis.google.com/js/api.js"></script>
   <script src="p5/p5.js"></script>
   <script src="p5/p5.sound.js"></script>
   <script src="realnews.js"></script>
