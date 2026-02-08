@@ -7,6 +7,7 @@ var imageOrder = [];
 var currentImageIndex = 0;
 var imagesLoaded = false;
 var isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+var wasHovering = false;
 
 // Animation settings
 var ANIMATION_DURATION = 8; // Total animation time in seconds
@@ -84,6 +85,21 @@ function calculateWelcomeBrightness() {
 	}
 }
 
+function drawCheckerboard() {
+	let squareSize = 7;
+
+	noStroke();
+	for (let x = 0; x < windowWidth; x += squareSize) {
+		for (let y = 0; y < windowHeight; y += squareSize) {
+			// Alternate between black and transparent
+			if ((x / squareSize + y / squareSize) % 2 === 0) {
+				fill(0);
+				rect(x, y, squareSize, squareSize);
+			}
+		}
+	}
+}
+
 function drawWelcomeScreen() {
 	let centerX = windowWidth / 2;
 	let centerY = windowHeight / 2;
@@ -100,8 +116,15 @@ function drawWelcomeScreen() {
 		mouseX > rectX && mouseX < rectX + rectW &&
 		mouseY > rectY && mouseY < rectY + rectH;
 
+	wasHovering = isHovering;
+
 	// Use hover appearance for touch devices or when hovering
 	let useHoverAppearance = isTouchDevice || isHovering;
+
+	// Draw checkerboard behind button on hover
+	if (isHovering) {
+		drawCheckerboard();
+	}
 
 	// Draw background for button (dark grey and opaque on hover/touch, black with brightness opacity otherwise)
 	if (useHoverAppearance) {
