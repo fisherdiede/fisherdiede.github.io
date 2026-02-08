@@ -230,13 +230,9 @@ function windowResized() {
 function spawnImage(x, y) {
 	if (!imagesLoaded || spawnerImages.length === 0) return;
 
-	// Get next image in randomized order
+	// Get next image in shuffled order
 	let imgIndex = imageOrder[currentImageIndex];
 	currentImageIndex = (currentImageIndex + 1) % imageOrder.length;
-
-	if (currentImageIndex === 0) {
-		shuffleArray(imageOrder);
-	}
 
 	// Create img element
 	let img = document.createElement('img');
