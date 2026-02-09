@@ -14,6 +14,7 @@ var lastPlayedNote = -1;
 var activeOscillators = [];
 var reverb;
 var reverbBus;
+var subtleReverb; // Always-on subtle reverb
 var audioUpdateCounter = 0;
 var minFrequency; // Calculated from EB_MAJOR_NOTES during setup
 var maxFrequency; // Calculated from EB_MAJOR_NOTES during setup
@@ -50,6 +51,9 @@ var FILTER_HOLD_RAMP_TIME = 0.2; // seconds - ramp time when holding filter at m
 var AUDIO_FADE_IN_TIME = 0.1; // seconds - oscillator fade in time
 var AUDIO_FADE_OUT_TIME = 0.1; // seconds - oscillator fade out time
 var AUDIO_AMPLITUDE = 0.3; // oscillator amplitude
+var SUBTLE_REVERB_DURATION = 2; // seconds - subtle reverb duration
+var SUBTLE_REVERB_DECAY = 2; // decay rate for subtle reverb
+var SUBTLE_REVERB_DRYWET = 0.2; // 20% wet, 80% dry
 var REVERB_FADE_TIME = 0.0; // seconds - fade time for reverb bus send
 var REVERB_DURATION = 6; // seconds - reverb duration
 var REVERB_DECAY = 3; // decay rate (higher = more intense)
@@ -117,7 +121,12 @@ function setup() {
 	// Load spawner images from manifest
 	loadStrings('assets/img/spawner/manifest.txt', onManifestLoaded);
 
-	// Initialize reverb bus and effect
+	// Initialize subtle reverb for always-on ambient effect
+	subtleReverb = new p5.Reverb();
+	subtleReverb.set(SUBTLE_REVERB_DURATION, SUBTLE_REVERB_DECAY);
+	subtleReverb.drywet(SUBTLE_REVERB_DRYWET);
+
+	// Initialize reverb bus and effect for hover/profile effect
 	reverbBus = new p5.Gain();
 	reverbBus.amp(0); // Start with no send
 
@@ -470,9 +479,11 @@ function spawnImage(x, y) {
 	osc.connect(filter);
 	filter.freq(FILTER_CUTOFF_MAX);
 
-	// Connect filter to main output and reverb bus
-	filter.connect(); // Main output (dry signal)
-	filter.connect(reverbBus); // Reverb bus (wet signal)
+	// Connect filter to outputs
+	// Route through subtle reverb (always-on, outputs to master with dry/wet mix)
+	filter.connect(subtleReverb);
+	// Also connect to reverb bus for intense hover/profile effect
+	filter.connect(reverbBus);
 
 	osc.start();
 
@@ -559,8 +570,10 @@ function spawnImage(x, y) {
 				img.style.opacity = opacity;
 
 				// Sync audio fade with visual fade (throttled for performance)
+				// Apply exponential curve for more natural-sounding audio fade
 				if (frameCounter % AMPLITUDE_FADE_THROTTLE === 0) {
-					let audioAmp = oscData.amplitude * opacity;
+					let audioOpacity = pow(opacity, 2); // Exponential fade curve
+					let audioAmp = oscData.amplitude * audioOpacity;
 					osc.amp(audioAmp, AUDIO_FADE_OUT_TIME);
 				}
 			}
