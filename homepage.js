@@ -101,6 +101,9 @@ function setup() {
 	canvas.position(0, 0);
 	canvas.style('z-index', '100');
 
+	// Enable audio on user interaction (required for mobile browsers)
+	userStartAudio();
+
 	// Load profile image
 	profileImg = loadImage('assets/img/fisher_diede_portrait.jpeg');
 
