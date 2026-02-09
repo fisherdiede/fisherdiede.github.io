@@ -47,7 +47,7 @@ roo_phantom.jpg | prince of the spires | 26 jul 2025 | phantom spires, ca
 roo_pup.jpg | headshot | 09 dec 2020 | mosier, or
 roo_tongue.jpg | happy pup | 14 dec 2025 | oakland, ca
 roo_waterfall.jpg | waterboys | 10 apr 2021 | cascadia, or
-sf.jpg | sunset downtown | 20 oct 2024 | san francisco, ca
+sf.jpg | sunrise downtown | 20 oct 2024 | san francisco, ca
 silver_lake.jpg | late night lake nights | 14 jun 2025 | lassen, ca
 ski_turn.jpg | ski | 30 jan 2026 | winter park, co
 ski_turn2.jpg | ski | 31 jan 2026 | winter park, co
