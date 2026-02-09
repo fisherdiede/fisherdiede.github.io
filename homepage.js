@@ -822,10 +822,10 @@ function spawnVideo(x, y) {
 	video.style.zIndex = '10';
 	video.style.transform = 'translate(-50%, -50%)';
 	video.style.transition = 'opacity 1s ease-out';
-	video.autoplay = true;
 	video.muted = true; // Mute video element, we'll play audio separately
 	video.loop = false;
 	video.playsInline = true; // For iOS compatibility
+	video.preload = 'auto'; // Preload video for smoother playback
 
 	// Adjust playback rate to stretch video to fill animation duration
 	video.addEventListener('loadedmetadata', function() {
@@ -833,6 +833,11 @@ function spawnVideo(x, y) {
 	});
 
 	document.body.appendChild(video);
+
+	// Explicitly play video for mobile compatibility
+	video.play().catch(err => {
+		console.log('Video play error:', err);
+	});
 
 	// Load and play audio separately at normal speed to avoid choppy playback
 	let audioSource = null;
