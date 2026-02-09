@@ -20,6 +20,7 @@ var checkerboardOpacity = 0;
 var checkerboardTargetOpacity = 0;
 var lastPlayedNote = -1;
 var activeOscillators = [];
+var activeTickers = []; // Track active ticker text boxes
 var reverb;
 var reverbBus;
 var subtleReverb; // Always-on subtle reverb
@@ -46,6 +47,14 @@ var BUTTON_FADE_DURATION = 0.25; // seconds - how long welcome button fades when
 var CHECKERBOARD_SQUARE_SIZE = 7;
 var CHECKERBOARD_OPACITY = 84;
 var CHECKERBOARD_FADE_TIME = 0.6; // seconds - how long to fade in checkerboard on hover
+
+// Ticker settings
+var TICKER_LEFT_MARGIN = 20; // pixels from left edge
+var TICKER_RIGHT_MARGIN = 20; // pixels from right edge
+var TICKER_BOTTOM_MARGIN = 20; // pixels from bottom edge
+var TICKER_PADDING = 10; // pixels padding inside ticker box
+var TICKER_SPACING = 10; // pixels between ticker boxes
+var TICKER_FONT_SIZE = 14;
 
 // Audio settings
 var ENABLE_VIBRATO = true; // Set to true to enable vibrato effect on hover
@@ -129,6 +138,17 @@ function setup() {
 	// Enable audio on user interaction (required for mobile browsers)
 	userStartAudio();
 
+	// Resume audio context when returning to page
+	document.addEventListener('visibilitychange', function() {
+		if (!document.hidden) {
+			userStartAudio();
+		}
+	});
+
+	window.addEventListener('focus', function() {
+		userStartAudio();
+	});
+
 	// Calculate frequency range for amplitude scaling and filter cutoff
 	minFrequency = Math.min(...EB_MAJOR_NOTES);
 	maxFrequency = Math.max(...EB_MAJOR_NOTES);
@@ -159,9 +179,30 @@ function setup() {
 
 function onManifestLoaded(manifest) {
 	for (let i = 0; i < manifest.length; i++) {
-		let filename = manifest[i].trim();
-		if (filename) {
-			spawnerImages.push('assets/img/spawner/' + filename);
+		let line = manifest[i].trim();
+		if (line) {
+			// Check if line contains a caption (format: filename | caption | time | place)
+			if (line.includes(' | ')) {
+				let parts = line.split(' | ');
+				let filename = parts[0].trim();
+				let caption = parts[1].trim();
+				let time = parts[2] ? parts[2].trim() : null;
+				let place = parts[3] ? parts[3].trim() : null;
+				spawnerImages.push({
+					path: 'assets/img/spawner/' + filename,
+					caption: caption,
+					time: time,
+					place: place
+				});
+			} else {
+				// No caption provided, use filename-based caption
+				spawnerImages.push({
+					path: 'assets/img/spawner/' + line,
+					caption: generateCaption(line),
+					time: null,
+					place: null
+				});
+			}
 		}
 	}
 
@@ -176,9 +217,30 @@ function onManifestLoaded(manifest) {
 
 function onVideoManifestLoaded(manifest) {
 	for (let i = 0; i < manifest.length; i++) {
-		let filename = manifest[i].trim();
-		if (filename) {
-			spawnerVideos.push('assets/img/spawner/movie/' + filename);
+		let line = manifest[i].trim();
+		if (line) {
+			// Check if line contains a caption (format: filename | caption | time | place)
+			if (line.includes(' | ')) {
+				let parts = line.split(' | ');
+				let filename = parts[0].trim();
+				let caption = parts[1].trim();
+				let time = parts[2] ? parts[2].trim() : null;
+				let place = parts[3] ? parts[3].trim() : null;
+				spawnerVideos.push({
+					path: 'assets/img/spawner/movie/' + filename,
+					caption: caption,
+					time: time,
+					place: place
+				});
+			} else {
+				// No caption provided, use filename-based caption
+				spawnerVideos.push({
+					path: 'assets/img/spawner/movie/' + line,
+					caption: generateCaption(line),
+					time: null,
+					place: null
+				});
+			}
 		}
 	}
 
@@ -196,6 +258,27 @@ function shuffleArray(array) {
 	for (let i = array.length - 1; i > 0; i--) {
 		const j = Math.floor(Math.random() * (i + 1));
 		[array[i], array[j]] = [array[j], array[i]];
+	}
+}
+
+function generateCaption(filename) {
+	// Remove file extension and path
+	let name = filename.split('/').pop().split('.')[0];
+
+	// Replace underscores with spaces and capitalize words
+	return name.split('_').map(word => {
+		return word.charAt(0).toUpperCase() + word.slice(1);
+	}).join(' ');
+}
+
+function updateTickerPositions() {
+	// Move all tickers to their new positions
+	let currentBottom = TICKER_BOTTOM_MARGIN;
+
+	for (let i = 0; i < activeTickers.length; i++) {
+		let ticker = activeTickers[i];
+		ticker.element.style.bottom = currentBottom + 'px';
+		currentBottom += ticker.element.offsetHeight + TICKER_SPACING;
 	}
 }
 
@@ -515,6 +598,9 @@ function windowResized() {
 }
 
 function mousePressed() {
+	// Resume audio context on user interaction (in case it was suspended)
+	userStartAudio();
+
 	if (!showProfile && fadeAmount === 0) {
 		let buttonBounds = getButtonBounds();
 		if (isMouseOverButton(buttonBounds)) {
@@ -633,7 +719,7 @@ function spawnImage(x, y) {
 
 	// Create img element
 	let img = document.createElement('img');
-	img.src = spawnerImages[imgIndex];
+	img.src = spawnerImages[imgIndex].path;
 	img.style.position = 'absolute';
 	img.style.left = x + 'px';
 	img.style.top = y + 'px';
@@ -644,8 +730,62 @@ function spawnImage(x, y) {
 	img.style.zIndex = '10';
 	img.style.transform = 'translate(-50%, -50%)';
 	img.style.transition = 'opacity 1s ease-out';
+	// Apply transparency vignette via mask - square vignette on all edges
+	img.style.webkitMaskImage = 'linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%), linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)';
+	img.style.maskImage = 'linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%), linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)';
+	img.style.webkitMaskComposite = 'source-in';
+	img.style.maskComposite = 'intersect';
+	img.style.webkitMaskSize = '100% 100%';
+	img.style.maskSize = '100% 100%';
+	img.style.webkitMaskRepeat = 'no-repeat';
+	img.style.maskRepeat = 'no-repeat';
+	img.style.webkitMaskPosition = 'center';
+	img.style.maskPosition = 'center';
 
 	document.body.appendChild(img);
+
+	// Create ticker element
+	let ticker = document.createElement('div');
+	let imageData = spawnerImages[imgIndex];
+
+	// Build ticker content
+	let tickerContent = imageData.caption;
+	if (imageData.time || imageData.place) {
+		tickerContent += '\n';
+		if (imageData.time) tickerContent += imageData.time;
+		if (imageData.time && imageData.place) tickerContent += ' | ';
+		if (imageData.place) tickerContent += imageData.place;
+	}
+
+	ticker.textContent = tickerContent;
+	ticker.style.position = 'fixed';
+	ticker.style.left = TICKER_LEFT_MARGIN + 'px';
+	ticker.style.right = TICKER_RIGHT_MARGIN + 'px';
+	ticker.style.bottom = TICKER_BOTTOM_MARGIN + 'px';
+	ticker.style.padding = TICKER_PADDING + 'px';
+	ticker.style.background = 'radial-gradient(ellipse at center, rgba(0, 0, 0, 0.33) 0%, rgba(0, 0, 0, 0.165) 70%, rgba(0, 0, 0, 0) 100%)';
+	ticker.style.color = 'white';
+	ticker.style.fontFamily = 'Courier New';
+	ticker.style.fontSize = TICKER_FONT_SIZE + 'px';
+	ticker.style.border = 'none';
+	ticker.style.borderRadius = '5px';
+	ticker.style.zIndex = '150';
+	ticker.style.transition = 'bottom 0.3s ease-out';
+	ticker.style.pointerEvents = 'none';
+	ticker.style.wordWrap = 'break-word';
+	ticker.style.whiteSpace = 'pre-line';
+
+	document.body.appendChild(ticker);
+
+	// Add to activeTickers array at the beginning (so it appears at bottom)
+	let tickerData = {
+		element: ticker,
+		startTime: Date.now()
+	};
+	activeTickers.unshift(tickerData);
+
+	// Update positions of all tickers
+	updateTickerPositions();
 
 	// Random movement
 	let angle = random(TWO_PI);
@@ -704,6 +844,11 @@ function spawnImage(x, y) {
 				let opacity = 1 - easedProgress;
 				img.style.opacity = opacity;
 
+				// Update ticker opacity
+				if (ticker) {
+					ticker.style.opacity = opacity;
+				}
+
 				// Sync audio fade with visual fade (throttled for performance)
 				// Apply exponential curve for more natural-sounding audio fade
 				if (frameCounter % AMPLITUDE_FADE_THROTTLE === 0) {
@@ -728,6 +873,15 @@ function spawnImage(x, y) {
 			let index = activeOscillators.findIndex(item => item.osc === osc);
 			if (index !== -1) {
 				activeOscillators.splice(index, 1);
+			}
+
+			// Remove ticker if it exists
+			if (ticker) {
+				document.body.removeChild(ticker);
+				let tickerIndex = activeTickers.findIndex(item => item.element === ticker);
+				if (tickerIndex !== -1) {
+					activeTickers.splice(tickerIndex, 1);
+				}
 			}
 
 			cancelAnimationFrame(animationFrame);
@@ -811,7 +965,7 @@ function spawnVideo(x, y) {
 
 	// Create video element
 	let video = document.createElement('video');
-	video.src = spawnerVideos[videoIndex];
+	video.src = spawnerVideos[videoIndex].path;
 	video.style.position = 'absolute';
 	video.style.left = x + 'px';
 	video.style.top = y + 'px';
@@ -822,6 +976,17 @@ function spawnVideo(x, y) {
 	video.style.zIndex = '10';
 	video.style.transform = 'translate(-50%, -50%)';
 	video.style.transition = 'opacity 1s ease-out';
+	// Apply transparency vignette via mask - square vignette on all edges
+	video.style.webkitMaskImage = 'linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%), linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)';
+	video.style.maskImage = 'linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%), linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)';
+	video.style.webkitMaskComposite = 'source-in';
+	video.style.maskComposite = 'intersect';
+	video.style.webkitMaskSize = '100% 100%';
+	video.style.maskSize = '100% 100%';
+	video.style.webkitMaskRepeat = 'no-repeat';
+	video.style.maskRepeat = 'no-repeat';
+	video.style.webkitMaskPosition = 'center';
+	video.style.maskPosition = 'center';
 	video.muted = true; // Mute video element, we'll play audio separately
 	video.loop = false;
 	video.playsInline = true; // For iOS compatibility
@@ -839,6 +1004,49 @@ function spawnVideo(x, y) {
 		console.log('Video play error:', err);
 	});
 
+	// Create ticker element
+	let ticker = document.createElement('div');
+	let videoData = spawnerVideos[videoIndex];
+
+	// Build ticker content
+	let tickerContent = videoData.caption;
+	if (videoData.time || videoData.place) {
+		tickerContent += '\n';
+		if (videoData.time) tickerContent += videoData.time;
+		if (videoData.time && videoData.place) tickerContent += ' | ';
+		if (videoData.place) tickerContent += videoData.place;
+	}
+
+	ticker.textContent = tickerContent;
+	ticker.style.position = 'fixed';
+	ticker.style.left = TICKER_LEFT_MARGIN + 'px';
+	ticker.style.right = TICKER_RIGHT_MARGIN + 'px';
+	ticker.style.bottom = TICKER_BOTTOM_MARGIN + 'px';
+	ticker.style.padding = TICKER_PADDING + 'px';
+	ticker.style.background = 'radial-gradient(ellipse at center, rgba(0, 0, 0, 0.33) 0%, rgba(0, 0, 0, 0.165) 70%, rgba(0, 0, 0, 0) 100%)';
+	ticker.style.color = 'white';
+	ticker.style.fontFamily = 'Courier New';
+	ticker.style.fontSize = TICKER_FONT_SIZE + 'px';
+	ticker.style.border = 'none';
+	ticker.style.borderRadius = '5px';
+	ticker.style.zIndex = '150';
+	ticker.style.transition = 'bottom 0.3s ease-out';
+	ticker.style.pointerEvents = 'none';
+	ticker.style.wordWrap = 'break-word';
+	ticker.style.whiteSpace = 'pre-line';
+
+	document.body.appendChild(ticker);
+
+	// Add to activeTickers array at the beginning (so it appears at bottom)
+	let tickerData = {
+		element: ticker,
+		startTime: Date.now()
+	};
+	activeTickers.unshift(tickerData);
+
+	// Update positions of all tickers
+	updateTickerPositions();
+
 	// Load and play audio separately at normal speed to avoid choppy playback
 	let audioSource = null;
 	let audioBuffer = null;
@@ -847,7 +1055,7 @@ function spawnVideo(x, y) {
 	let videoAudioNodes = {};
 
 	// Fetch and decode audio from video file
-	fetch(spawnerVideos[videoIndex])
+	fetch(spawnerVideos[videoIndex].path)
 		.then(response => response.arrayBuffer())
 		.then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
 		.then(buffer => {
@@ -953,6 +1161,11 @@ function spawnVideo(x, y) {
 				let opacity = 1 - easedProgress;
 				video.style.opacity = opacity;
 
+				// Update ticker opacity
+				if (ticker) {
+					ticker.style.opacity = opacity;
+				}
+
 				// Sync audio fade with visual fade (throttled for performance)
 				// Apply exponential curve for more natural-sounding audio fade
 				if (frameCounter % AMPLITUDE_FADE_THROTTLE === 0) {
@@ -1003,6 +1216,15 @@ function spawnVideo(x, y) {
 			let index = activeOscillators.findIndex(item => item.osc === osc);
 			if (index !== -1) {
 				activeOscillators.splice(index, 1);
+			}
+
+			// Remove ticker if it exists
+			if (ticker) {
+				document.body.removeChild(ticker);
+				let tickerIndex = activeTickers.findIndex(item => item.element === ticker);
+				if (tickerIndex !== -1) {
+					activeTickers.splice(tickerIndex, 1);
+				}
 			}
 
 			// Reset flag to allow spawning again

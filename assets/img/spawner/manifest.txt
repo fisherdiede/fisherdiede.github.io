@@ -1,69 +1,69 @@
-ahoy.jpg
-alpental.jpg
-asawa.jpg
-bear_valley_trees.jpg
-bear_winter.jpg
-bluegrass_jam_leader.jpg
-bluegrass_jam.jpg
-coffee_cheesecake.jpg
-coffee_glitch.jpg
-coffee_glitch2.jpg
-coffee_machine.jpg
-coffee1.jpg
-coffee2.jpg
-conference.jpg
-deepwater_point.jpg
-disney.jpg
-friars.jpg
-lovers_leap.jpg
-maligne.jpg
-mission_window_sunset.jpg
-moose.jpg
-muni1.jpg
-muni2.jpg
-muni3.jpg
-mush.jpg
-nara_garden.jpg
-nara_hills.jpg
-oracle_park.jpg
-packy_shasta.jpg
-phantom.jpg
-photog.jpg
-rainier_close.jpg
-reiki_seattle_lobby.jpg
-reindeer.jpg
-roo_ball.jpg
-roo_beach.jpg
-roo_bernal_houses.jpg
-roo_bernal_sunrise.jpg
-roo_billygoat.jpg
-roo_bucket.jpg
-roo_bw.jpg
-roo_dolo.jpg
-roo_forest.jpg
-roo_long.jpg
-roo_lookback.jpg
-roo_phantom.jpg
-roo_pup.jpg
-roo_tongue.jpg
-roo_waterfall.jpg
-sf.jpg
-silver_lake.jpg
-ski_turn.jpg
-ski_turn2.jpg
-skijump.jpg
-skijump2.jpg
-skijump3.jpg
-skijump4.jpg
-skiline.jpg
-skislash.jpg
-squid.jpg
-street_sunrise.jpg
-sunset_uppernoe.jpg
-tahoe_moonrise.jpg
-tokyo_mug.jpg
-tonquin_moorise.jpg
-tonquin_risen.jpg
-tonquin_sunrise.jpg
-winetime.jpg
-yellow_uppernoe.jpg
+ahoy.jpg | momentary captain | 12 oct 2025 | san francisco, ca
+alpental.jpg | snowy trees from the bridge | 10 jan 2026 | alpental, wa
+asawa.jpg | ruth asawa exhibit @ sfmoma | 22 jun 2025 | san francisco, ca
+bear_valley_trees.jpg | golden winter evening skies | 27 nov 2024 | bear valley, ca
+bear_winter.jpg | picking out a christmas tree | 29 nov 2024 | bear valley, ca
+bluegrass_jam_leader.jpg | leading a song @ sunny's | 18 may 2025 | brooklyn, ny
+bluegrass_jam.jpg | sittin in @ sunny's | 18 may 2025 | brooklyn, ny
+coffee_cheesecake.jpg | cheesecake and dark roast @ otsu coffee | 05 jul 2025 | tokyo, japan
+coffee_glitch.jpg | milk drink @ glitch | 03 jul 2025 | tokyo, japan
+coffee_glitch2.jpg | pour over @ glitch | 29 jun 2025 | osaka, japan
+coffee_machine.jpg | home espresso setup | 01 dec 2025 | san francisco, ca
+coffee1.jpg | coffee @ home | 04 feb 2026 | san francisco, ca
+coffee2.jpg | coffee @ home | 25 feb 2025 | san francisco, ca
+conference.jpg | world haptics conference | 08 jul 2025 | suwon, south korea
+deepwater_point.jpg | deepwater point from high in the sky | 19 sep 2025 | traverse city, mi
+disney.jpg | space mountain ヽ(ﾟДﾟ)ﾉ | 30 aug 2025 | disneyland, ca
+friars.jpg | singing 'escape (the piña colada song)' with wes at a friars concert | 03 dec 2016 | ann arbor, mi
+lovers_leap.jpg | scouting routes | 23 sep 2023 | lover's leap, ca
+maligne.jpg | paddling on maligne lake | 25 aug 2018 | jasper, canada
+mission_window_sunset.jpg | sunset reflected on mission windows | 03 feb 2026 | san francisco, ca
+moose.jpg | munching moose | 30 jan 2026 | winter park, co
+muni1.jpg | cheesing for the classic muni car | 04 feb 2026 | san francisco, ca
+muni2.jpg | lookin out the window on a classic muni car | 04 feb 2026 | san francisco, ca
+muni3.jpg | moody classic muni car | 04 feb 2026 | san francisco, ca
+mush.jpg | sled dogs | 03 jan 2025 | fairbanks, ak
+nara_garden.jpg | tea garden | 30 jun 2025 | nara, japan
+nara_hills.jpg | lush hills | 30 jun 2025 | nara, japan
+oracle_park.jpg | the A's left... | 27 apr 2025 | oracle park, sf
+packy_shasta.jpg | copilot | 11 jan 2026 | mt. shasta, ca
+phantom.jpg | climbing rocks | 27 jul 2025 | phantom spires, ca
+photog.jpg | amethyst & aquamarine | 01 mar 2025 | san francisco, ca
+rainier_close.jpg | rainier from the chair | 10 jan 2026 | alpental, wa
+reiki_seattle_lobby.jpg | lapdog | 11 jan 2026 | seattle, wa
+reindeer.jpg | blitzen | 05 jan 2025 | fairbanks, ak
+roo_ball.jpg | full time job | 24 mar 2025 | san francisco, ca
+roo_beach.jpg | sniffing sand | 12 oct 2025 | san francisco, ca
+roo_bernal_houses.jpg | prince of the city | 22 jan 2025 | san francisco, ca
+roo_bernal_sunrise.jpg | prince of bernal | 22 jan 2025 | san francisco, ca
+roo_billygoat.jpg | prince of billy goat hill | 16 oct 2025 | san francisco, ca
+roo_bucket.jpg | soggy chains @ milo mciver | 05 jan 2026 | estacada, or
+roo_bw.jpg | sittin by the window | 26 nov 2024 | bear valley, ca
+roo_dolo.jpg | prince of dolo | 01 nov 2025 | san francisco, ca
+roo_forest.jpg | prince of the redwoods | 14 dec 2025 | oakland, ca
+roo_long.jpg | snoot | 05 sep 2025 | truckee, ca
+roo_lookback.jpg | prince of the forest | 14 dec 2025 | oakland, ca
+roo_phantom.jpg | prince of the spires | 26 jul 2025 | phantom spires, ca
+roo_pup.jpg | headshot | 09 dec 2020 | mosier, or
+roo_tongue.jpg | happy pup | 14 dec 2025 | oakland, ca
+roo_waterfall.jpg | waterboys | 10 apr 2021 | cascadia, or
+sf.jpg | sunset downtown | 20 oct 2024 | san francisco, ca
+silver_lake.jpg | late night lake nights | 14 jun 2025 | lassen, ca
+ski_turn.jpg | ski | 30 jan 2026 | winter park, co
+ski_turn2.jpg | ski | 31 jan 2026 | winter park, co
+skijump.jpg | ski | 31 jan 2026 | winter park, co
+skijump2.jpg | ski with sutton | 31 jan 2026 | winter park, co
+skijump3.jpg | ski | 31 jan 2026 | winter park, co
+skijump4.jpg | ski | 02 mar 2020 | palisades, ca
+skiline.jpg | lift line | 31 jan 2026 | winter park, co
+skislash.jpg | ski | 30 jan 2026 | winter park, co
+squid.jpg | omakase @ sushi fujioka | 03 jul 2025 | ginza, tokyo
+street_sunrise.jpg | frosted sunrise | 16 oct 2025 | san francisco, ca
+sunset_uppernoe.jpg | sunset at the dog park | 14 jan 2025 | san francisco, ca
+tahoe_moonrise.jpg | super moonrise | 07 sep 2025 | tahoe city, ca
+tokyo_mug.jpg | paparazzi | 10 feb 2024 | tokyo, japan
+tonquin_moorise.jpg | moonrise/sunset over the ramparts | 21 aug 2018 | jasper, canada
+tonquin_risen.jpg | sun risen over the ramparts | 21 aug 2018 | jasper, canada
+tonquin_sunrise.jpg | first light over the ramparts | 21 aug 2018 | jasper, canada
+winetime.jpg | wine time with my pops | 26 dec 2025 | wilmington, nc
+yellow_uppernoe.jpg | strange sky | 14 oct 2025 | san francisco, ca
