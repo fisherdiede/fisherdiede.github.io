@@ -351,6 +351,9 @@ function drawProfileScreen() {
 	// Continue updating audio effects for active oscillators
 	updateAudioEffects(false);
 
+	// Draw checkerboard background
+	drawCheckerboard();
+
 	let centerX = windowWidth / 2;
 	let centerY = windowHeight / 2;
 
