@@ -768,7 +768,7 @@ function spawnImage(x, y) {
 	ticker.style.fontSize = TICKER_FONT_SIZE + 'px';
 	ticker.style.border = 'none';
 	ticker.style.borderRadius = '5px';
-	ticker.style.zIndex = '150';
+	ticker.style.zIndex = '50';
 	ticker.style.transition = 'bottom 0.3s ease-out';
 	ticker.style.pointerEvents = 'none';
 	ticker.style.wordWrap = 'break-word';
@@ -1029,7 +1029,7 @@ function spawnVideo(x, y) {
 	ticker.style.fontSize = TICKER_FONT_SIZE + 'px';
 	ticker.style.border = 'none';
 	ticker.style.borderRadius = '5px';
-	ticker.style.zIndex = '150';
+	ticker.style.zIndex = '50';
 	ticker.style.transition = 'bottom 0.3s ease-out';
 	ticker.style.pointerEvents = 'none';
 	ticker.style.wordWrap = 'break-word';
