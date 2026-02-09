@@ -1,5 +1,6 @@
 // ==================== GLOBAL STATE ====================
 var canvas;
+var checkerboardDiv;
 var showProfile = false;
 var fadeAmount = 0;
 var profileImg;
@@ -44,7 +45,7 @@ var BUTTON_WIDTH = 200;
 var BUTTON_HEIGHT = 60;
 var BUTTON_RADIUS = 10;
 var BUTTON_FADE_DURATION = 0.25; // seconds - how long welcome button fades when clicked
-var CHECKERBOARD_SQUARE_SIZE = 7;
+var CHECKERBOARD_SQUARE_SIZE = 2;
 var CHECKERBOARD_OPACITY = 84;
 var CHECKERBOARD_FADE_TIME = 0.6; // seconds - how long to fade in checkerboard on hover
 
@@ -131,9 +132,32 @@ var EB_MAJOR_NOTES = [
 // ==================== SETUP & INITIALIZATION ====================
 function setup() {
 	console.log("homepage setup");
+
+	// Create checkerboard div (behind tickers)
+	checkerboardDiv = createDiv();
+	checkerboardDiv.position(0, 0);
+	checkerboardDiv.style('width', '100%');
+	checkerboardDiv.style('height', '100%');
+	checkerboardDiv.style('position', 'fixed');
+	checkerboardDiv.style('top', '0');
+	checkerboardDiv.style('left', '0');
+	checkerboardDiv.style('z-index', '90');
+	checkerboardDiv.style('pointer-events', 'none');
+	checkerboardDiv.style('opacity', '0');
+
+	// Create precise checkerboard pattern - standard CSS approach
+	let squareSize = CHECKERBOARD_SQUARE_SIZE;
+	checkerboardDiv.style('background-color', 'transparent');
+	checkerboardDiv.style('background-image',
+		'linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%), ' +
+		'linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%)');
+	checkerboardDiv.style('background-size', (squareSize * 2) + 'px ' + (squareSize * 2) + 'px');
+	checkerboardDiv.style('background-position', '0 0, ' + squareSize + 'px ' + squareSize + 'px');
+
+	// Create main canvas for welcome button and profile (in front of tickers)
 	canvas = createCanvas(windowWidth, windowHeight);
 	canvas.position(0, 0);
-	canvas.style('z-index', '100');
+	canvas.style('z-index', '110');
 
 	// Enable audio on user interaction (required for mobile browsers)
 	userStartAudio();
@@ -388,16 +412,8 @@ function calculateWelcomeBrightness() {
 }
 
 function drawCheckerboard(opacity) {
-	noStroke();
-	for (let x = 0; x < windowWidth; x += CHECKERBOARD_SQUARE_SIZE) {
-		for (let y = 0; y < windowHeight; y += CHECKERBOARD_SQUARE_SIZE) {
-			// Alternate between black and transparent
-			if ((x / CHECKERBOARD_SQUARE_SIZE + y / CHECKERBOARD_SQUARE_SIZE) % 2 === 0) {
-				fill(0, opacity);
-				rect(x, y, CHECKERBOARD_SQUARE_SIZE, CHECKERBOARD_SQUARE_SIZE);
-			}
-		}
-	}
+	// Update checkerboard div opacity (normalized from 0-255 to 0-1)
+	checkerboardDiv.style('opacity', (opacity / 255).toString());
 }
 
 function drawGradientRect(x, y, w, h, radius, centerAlpha) {
@@ -458,9 +474,7 @@ function drawWelcomeScreen() {
 
 	// Draw checkerboard behind button (always, but with animated opacity)
 	// Checkerboard fades independently - not affected by button fade
-	if (checkerboardOpacity > 0.1) {
-		drawCheckerboard(checkerboardOpacity);
-	}
+	drawCheckerboard(checkerboardOpacity);
 
 	// Draw button background
 	if (useHoverAppearance) {
@@ -768,7 +782,7 @@ function spawnImage(x, y) {
 	ticker.style.fontSize = TICKER_FONT_SIZE + 'px';
 	ticker.style.border = 'none';
 	ticker.style.borderRadius = '5px';
-	ticker.style.zIndex = '50';
+	ticker.style.zIndex = '100';
 	ticker.style.transition = 'bottom 0.3s ease-out';
 	ticker.style.pointerEvents = 'none';
 	ticker.style.wordWrap = 'break-word';
@@ -1029,7 +1043,7 @@ function spawnVideo(x, y) {
 	ticker.style.fontSize = TICKER_FONT_SIZE + 'px';
 	ticker.style.border = 'none';
 	ticker.style.borderRadius = '5px';
-	ticker.style.zIndex = '50';
+	ticker.style.zIndex = '100';
 	ticker.style.transition = 'bottom 0.3s ease-out';
 	ticker.style.pointerEvents = 'none';
 	ticker.style.wordWrap = 'break-word';
