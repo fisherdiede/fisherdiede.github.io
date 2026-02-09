@@ -37,15 +37,15 @@ var PAGE_FADE_DURATION = 4; // seconds - how long page transitions take
 var SCALE_GROWTH = 2; // How much to grow (1 = no growth, 2 = double size)
 var SPEED_MIN = 0.05;
 var SPEED_MAX = 0.1;
-var SIZE_MIN = 100;
-var SIZE_MAX = 200;
+var SIZE_MIN = 150;
+var SIZE_MAX = 250;
 
 // UI settings
 var BUTTON_WIDTH = 200;
 var BUTTON_HEIGHT = 60;
 var BUTTON_RADIUS = 10;
 var BUTTON_FADE_DURATION = 0.25; // seconds - how long welcome button fades when clicked
-var CHECKERBOARD_SQUARE_SIZE = 2;
+var CHECKERBOARD_SQUARE_SIZE = 3;
 var CHECKERBOARD_OPACITY = 84;
 var CHECKERBOARD_FADE_TIME = 0.6; // seconds - how long to fade in checkerboard on hover
 
@@ -495,6 +495,14 @@ function drawWelcomeScreen() {
 	strokeWeight(2);
 	rect(buttonBounds.x, buttonBounds.y, buttonBounds.width, buttonBounds.height, BUTTON_RADIUS);
 
+	// Draw "all are" text above button
+	fill(0, 255 * buttonOpacity);
+	noStroke();
+	textFont("Courier New");
+	textSize(24);
+	textAlign(CENTER, CENTER);
+	text("all are", centerX, centerY - 50);
+
 	// Draw welcome text
 	if (useHoverAppearance) {
 		fill(255, 255 * buttonOpacity);
@@ -549,15 +557,15 @@ function drawProfileScreen() {
 	text("Fisher Diede", centerX, centerY - 120);
 
 	// Profile image with circular mask
+	let circleDiameter = isTouchDevice ? 80 : 100; // Smaller on mobile
 	push();
 	drawingContext.save();
 	drawingContext.beginPath();
-	drawingContext.arc(centerX, centerY - 30, 50, 0, Math.PI * 2);
+	drawingContext.arc(centerX, centerY - 30, circleDiameter / 2, 0, Math.PI * 2);
 	drawingContext.closePath();
 	drawingContext.clip();
 
 	// Draw image maintaining aspect ratio, cropped to fill circle
-	let circleDiameter = 100;
 	let imgAspect = profileImg.width / profileImg.height;
 	let imgW, imgH;
 
@@ -581,11 +589,11 @@ function drawProfileScreen() {
 	// Black outer border (subtle, matches background opacity)
 	stroke(0, alpha * 0.33);
 	strokeWeight(2);
-	circle(centerX, centerY - 30, 104);
+	circle(centerX, centerY - 30, circleDiameter + 4); // Use dynamic diameter for border
 	// White inner border
 	stroke(255, alpha);
 	strokeWeight(2);
-	circle(centerX, centerY - 30, 100);
+	circle(centerX, centerY - 30, circleDiameter);
 
 	// Draw gradient background behind bio and email
 	let bioW = 280;
