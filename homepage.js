@@ -1,3 +1,4 @@
+// ==================== GLOBAL STATE ====================
 var canvas;
 var showProfile = false;
 var fadeAmount = 0;
@@ -8,21 +9,30 @@ var currentImageIndex = 0;
 var imagesLoaded = false;
 var isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 var wasHovering = false;
-var isHoveringWelcome = false; // Track if hovering over welcome button
+var isHoveringWelcome = false;
 var lastPlayedNote = -1;
-var activeOscillators = []; // Track all active oscillators for vibrato effect
-var reverb; // Global reverb effect
-var reverbBus; // Reverb bus/aux send
-var audioUpdateCounter = 0; // Throttle audio updates
+var activeOscillators = [];
+var reverb;
+var reverbBus;
+var audioUpdateCounter = 0;
 
+// ==================== CONFIGURATION ====================
 // Animation settings
 var ANIMATION_DURATION = 10; // Total animation time in seconds
 var FADE_START_TIME = 4; // When to start fading out
+var FADE_INCREMENT = 0.05; // How fast screens fade
 var SCALE_GROWTH = 2; // How much to grow (1 = no growth, 2 = double size)
 var SPEED_MIN = 0.05;
 var SPEED_MAX = 0.1;
 var SIZE_MIN = 100;
 var SIZE_MAX = 200;
+
+// UI settings
+var BUTTON_WIDTH = 200;
+var BUTTON_HEIGHT = 60;
+var BUTTON_RADIUS = 10;
+var CHECKERBOARD_SQUARE_SIZE = 7;
+var CHECKERBOARD_OPACITY = 84;
 
 // Audio settings
 var ENABLE_VIBRATO = true; // Set to true to enable vibrato effect on hover
@@ -30,12 +40,20 @@ var VIBRATO_RATE_MIN = 0.5; // Hz - minimum vibrato speed
 var VIBRATO_RATE_MAX = 10; // Hz - maximum vibrato speed
 var VIBRATO_DEPTH_MIN = 0.25; // Hz - minimum vibrato amount
 var VIBRATO_DEPTH_MAX = 1.5; // Hz - maximum vibrato amount
+var VIBRATO_RAMP_TIME = 0.1; // seconds - ramp time for vibrato frequency changes
 var FILTER_CUTOFF_MIN = 1000; // Hz - filter cutoff at screen edges
 var FILTER_CUTOFF_MAX = 12000; // Hz - filter cutoff at screen center
+var FILTER_RAMP_TIME = 0.02; // seconds - ramp time for filter frequency changes
+var FILTER_HOLD_RAMP_TIME = 0.2; // seconds - ramp time when holding filter at max
+var AUDIO_FADE_IN_TIME = 0.1; // seconds - oscillator fade in time
+var AUDIO_FADE_OUT_TIME = 0.1; // seconds - oscillator fade out time
+var AUDIO_AMPLITUDE = 0.3; // oscillator amplitude
 var REVERB_FADE_TIME = 0.0; // seconds - fade time for reverb bus send
 var REVERB_DURATION = 6; // seconds - reverb duration
 var REVERB_DECAY = 3; // decay rate (higher = more intense)
 var REVERB_DRYWET = 1; // 0 = fully dry, 1 = fully wet
+var AUDIO_UPDATE_THROTTLE = 3; // Update vibrato every N frames
+var AMPLITUDE_FADE_THROTTLE = 3; // Update amplitude fade every N frames
 
 // Eb major scale frequencies (across multiple octaves)
 var EB_MAJOR_NOTES = [
@@ -76,6 +94,7 @@ var EB_MAJOR_NOTES = [
 	1244.51  // Eb6
 ];
 
+// ==================== SETUP & INITIALIZATION ====================
 function setup() {
 	console.log("homepage setup");
 	canvas = createCanvas(windowWidth, windowHeight);
@@ -114,6 +133,7 @@ function onManifestLoaded(manifest) {
 	console.log('Spawner images loaded:', spawnerImages.length, 'images');
 }
 
+// ==================== HELPER FUNCTIONS ====================
 function shuffleArray(array) {
 	for (let i = array.length - 1; i > 0; i--) {
 		const j = Math.floor(Math.random() * (i + 1));
@@ -121,6 +141,66 @@ function shuffleArray(array) {
 	}
 }
 
+function getButtonBounds() {
+	let centerX = windowWidth / 2;
+	let centerY = windowHeight / 2;
+	return {
+		x: centerX - BUTTON_WIDTH / 2,
+		y: centerY - BUTTON_HEIGHT / 2,
+		width: BUTTON_WIDTH,
+		height: BUTTON_HEIGHT
+	};
+}
+
+function isMouseOverButton(bounds) {
+	return !isTouchDevice &&
+		mouseX > bounds.x && mouseX < bounds.x + bounds.width &&
+		mouseY > bounds.y && mouseY < bounds.y + bounds.height;
+}
+
+function updateAudioEffects(isHovering) {
+	audioUpdateCounter++;
+	let shouldUpdateAudio = audioUpdateCounter % AUDIO_UPDATE_THROTTLE === 0;
+
+	// Apply vibrato and reverb when hovering or when profile is showing
+	if ((isHovering && !showProfile) || showProfile) {
+		// Vibrato effect - only apply to oscillators with vibrato enabled
+		if (ENABLE_VIBRATO && shouldUpdateAudio) {
+			for (let oscData of activeOscillators) {
+				if (oscData.enableVibrato) {
+					let lfo = sin(frameCount * 0.1 * oscData.vibratoRate) * oscData.vibratoDepth;
+					oscData.osc.freq(oscData.baseFreq + lfo, VIBRATO_RAMP_TIME);
+				}
+			}
+		}
+
+		// Hold filter at maximum cutoff - only on hover state change (welcome screen only)
+		if (!wasHovering && !showProfile) {
+			for (let oscData of activeOscillators) {
+				oscData.filter.freq(FILTER_CUTOFF_MAX, FILTER_HOLD_RAMP_TIME);
+			}
+		}
+
+		// Activate reverb bus send
+		reverbBus.amp(1, REVERB_FADE_TIME);
+	} else {
+		// Reset to base frequency when not hovering and not on profile
+		if (ENABLE_VIBRATO && wasHovering) {
+			for (let oscData of activeOscillators) {
+				if (oscData.enableVibrato) {
+					oscData.osc.freq(oscData.baseFreq, FILTER_HOLD_RAMP_TIME);
+				}
+			}
+		}
+
+		// Deactivate reverb bus send
+		reverbBus.amp(0, REVERB_FADE_TIME);
+	}
+
+	wasHovering = isHovering;
+}
+
+// ==================== P5.JS CORE FUNCTIONS ====================
 function draw() {
 	clear();
 
@@ -131,6 +211,7 @@ function draw() {
 	}
 }
 
+// ==================== DRAWING FUNCTIONS ====================
 function calculateWelcomeBrightness() {
 	let centerX = windowWidth / 2;
 	let centerY = windowHeight / 2;
@@ -153,15 +234,13 @@ function calculateWelcomeBrightness() {
 }
 
 function drawCheckerboard() {
-	let squareSize = 7;
-
 	noStroke();
-	for (let x = 0; x < windowWidth; x += squareSize) {
-		for (let y = 0; y < windowHeight; y += squareSize) {
+	for (let x = 0; x < windowWidth; x += CHECKERBOARD_SQUARE_SIZE) {
+		for (let y = 0; y < windowHeight; y += CHECKERBOARD_SQUARE_SIZE) {
 			// Alternate between black and transparent
-			if ((x / squareSize + y / squareSize) % 2 === 0) {
-				fill(0, 84);
-				rect(x, y, squareSize, squareSize);
+			if ((x / CHECKERBOARD_SQUARE_SIZE + y / CHECKERBOARD_SQUARE_SIZE) % 2 === 0) {
+				fill(0, CHECKERBOARD_OPACITY);
+				rect(x, y, CHECKERBOARD_SQUARE_SIZE, CHECKERBOARD_SQUARE_SIZE);
 			}
 		}
 	}
@@ -172,56 +251,13 @@ function drawWelcomeScreen() {
 	let centerY = windowHeight / 2;
 	let brightness = calculateWelcomeBrightness();
 
-	// Calculate button bounds
-	let rectW = 200;
-	let rectH = 60;
-	let rectX = centerX - rectW/2;
-	let rectY = centerY - rectH/2;
+	// Get button bounds and check hover state
+	let buttonBounds = getButtonBounds();
+	let isHovering = isMouseOverButton(buttonBounds);
+	isHoveringWelcome = isHovering;
 
-	// Check if mouse is hovering over button
-	let isHovering = !isTouchDevice &&
-		mouseX > rectX && mouseX < rectX + rectW &&
-		mouseY > rectY && mouseY < rectY + rectH;
-
-	isHoveringWelcome = isHovering; // Update global hover state
-
-	// Throttle audio updates to every 3rd frame for better performance
-	audioUpdateCounter++;
-	let shouldUpdateAudio = audioUpdateCounter % 3 === 0;
-
-	// Apply vibrato and reverb when hovering
-	if (isHovering && !showProfile) {
-		// Vibrato effect (if enabled) - throttled for performance
-		if (ENABLE_VIBRATO && shouldUpdateAudio) {
-			for (let oscData of activeOscillators) {
-				let lfo = sin(frameCount * 0.1 * oscData.vibratoRate) * oscData.vibratoDepth;
-				oscData.osc.freq(oscData.baseFreq + lfo, 0.1);
-			}
-		}
-
-		// Hold filter at maximum cutoff - only on hover state change
-		if (!wasHovering) {
-			for (let oscData of activeOscillators) {
-				oscData.filter.freq(FILTER_CUTOFF_MAX, 0.2);
-			}
-		}
-
-		// Activate reverb bus send
-		reverbBus.amp(1, REVERB_FADE_TIME);
-	} else {
-		// Reset to base frequency when not hovering - only on state change
-		if (ENABLE_VIBRATO && wasHovering) {
-			for (let oscData of activeOscillators) {
-				oscData.osc.freq(oscData.baseFreq, 0.2);
-			}
-		}
-
-		// Deactivate reverb bus send
-		reverbBus.amp(0, REVERB_FADE_TIME);
-	}
-
-	// Update wasHovering state after processing
-	wasHovering = isHovering;
+	// Update audio effects
+	updateAudioEffects(isHovering);
 
 	// Use hover appearance for touch devices or when hovering
 	let useHoverAppearance = isTouchDevice || isHovering;
@@ -231,16 +267,16 @@ function drawWelcomeScreen() {
 		drawCheckerboard();
 	}
 
-	// Draw background for button (dark grey and opaque on hover/touch, black with brightness opacity otherwise)
+	// Draw button background
 	if (useHoverAppearance) {
 		fill(15, 255);
 	} else {
 		fill(0, brightness);
 	}
 	noStroke();
-	rect(rectX, rectY, rectW, rectH, 10);
+	rect(buttonBounds.x, buttonBounds.y, buttonBounds.width, buttonBounds.height, BUTTON_RADIUS);
 
-	// Draw rounded rectangle border
+	// Draw button border
 	noFill();
 	if (useHoverAppearance) {
 		stroke(255);
@@ -248,7 +284,7 @@ function drawWelcomeScreen() {
 		stroke(Math.floor(brightness));
 	}
 	strokeWeight(2);
-	rect(rectX, rectY, rectW, rectH, 10);
+	rect(buttonBounds.x, buttonBounds.y, buttonBounds.width, buttonBounds.height, BUTTON_RADIUS);
 
 	// Draw welcome text
 	if (useHoverAppearance) {
@@ -262,9 +298,9 @@ function drawWelcomeScreen() {
 	textAlign(CENTER, CENTER);
 	text("welcome", centerX, centerY);
 
-	// Animate fade
+	// Animate fade transition
 	if (fadeAmount > 0) {
-		fadeAmount += 0.05;
+		fadeAmount += FADE_INCREMENT;
 		if (fadeAmount >= 1) {
 			showProfile = true;
 			fadeAmount = 0;
@@ -273,9 +309,12 @@ function drawWelcomeScreen() {
 }
 
 function drawProfileScreen() {
-	isHoveringWelcome = false; // Reset hover state when profile is showing
-	fadeAmount = min(fadeAmount + 0.05, 1);
+	isHoveringWelcome = false;
+	fadeAmount = min(fadeAmount + FADE_INCREMENT, 1);
 	let alpha = 255 * fadeAmount;
+
+	// Continue updating audio effects for active oscillators
+	updateAudioEffects(false);
 
 	let centerX = windowWidth / 2;
 	let centerY = windowHeight / 2;
@@ -352,10 +391,24 @@ function drawProfileScreen() {
 	text("fisherdiede@icloud.com", centerX, centerY + 100);
 }
 
+// ==================== EVENT HANDLERS ====================
 function windowResized() {
   	resizeCanvas(windowWidth, windowHeight);
 }
 
+function mousePressed() {
+	if (!showProfile && fadeAmount === 0) {
+		let buttonBounds = getButtonBounds();
+		if (isMouseOverButton(buttonBounds)) {
+			fadeAmount = 0.01;
+			return false;
+		}
+	}
+
+	spawnImage(mouseX, mouseY);
+}
+
+// ==================== IMAGE SPAWNING & AUDIO ====================
 function spawnImage(x, y) {
 	if (!imagesLoaded || spawnerImages.length === 0) {
 		console.log('Spawn blocked - imagesLoaded:', imagesLoaded, 'spawnerImages.length:', spawnerImages.length);
@@ -397,8 +450,8 @@ function spawnImage(x, y) {
 
 	osc.start();
 
-	// Fade in quickly
-	osc.amp(0.3, 0.1);
+	// Fade in
+	osc.amp(AUDIO_AMPLITUDE, AUDIO_FADE_IN_TIME);
 
 	// Track oscillator and filter for effects with randomized vibrato parameters
 	let oscData = {
@@ -406,7 +459,8 @@ function spawnImage(x, y) {
 		baseFreq: baseFrequency,
 		filter: filter,
 		vibratoRate: random(VIBRATO_RATE_MIN, VIBRATO_RATE_MAX),
-		vibratoDepth: random(VIBRATO_DEPTH_MIN, VIBRATO_DEPTH_MAX)
+		vibratoDepth: random(VIBRATO_DEPTH_MIN, VIBRATO_DEPTH_MAX),
+		enableVibrato: !showProfile // Only enable vibrato for sawtooth oscillators (welcome screen)
 	};
 	activeOscillators.push(oscData);
 
@@ -442,20 +496,21 @@ function spawnImage(x, y) {
 		frameCounter++;
 
 		if (elapsed < ANIMATION_DURATION) {
-			// Calculate mouse proximity for filter modulation (throttled to every 5th frame)
-			if (!isTouchDevice && !isHoveringWelcome && frameCounter % 5 === 0) {
+			// Calculate mouse proximity for filter modulation
+			// Only respond to cursor on welcome screen, not on profile screen
+			if (!isTouchDevice && !isHoveringWelcome && !showProfile) {
 				let centerX = windowWidth / 2;
 				let centerY = windowHeight / 2;
 				let d = dist(mouseX, mouseY, centerX, centerY);
 				let maxDist = dist(0, 0, centerX, centerY);
 				let normalizedDist = constrain(d / maxDist, 0, 1);
 
-				// Apply subtle exponential curve (inverse so closer = higher cutoff)
+				// Apply exponential curve (inverse so closer = higher cutoff)
 				let exponentialFactor = pow(1 - normalizedDist, 3);
 
 				// Map cutoff from min (edges) to max (center)
 				let cutoffFreq = FILTER_CUTOFF_MIN + (exponentialFactor * (FILTER_CUTOFF_MAX - FILTER_CUTOFF_MIN));
-				filter.freq(cutoffFreq, 0.15); // Longer ramp for smoothness
+				filter.freq(cutoffFreq, FILTER_RAMP_TIME);
 			}
 
 			// Move
@@ -473,10 +528,10 @@ function spawnImage(x, y) {
 				let opacity = 1 - (elapsed - FADE_START_TIME) / (ANIMATION_DURATION - FADE_START_TIME);
 				img.style.opacity = opacity;
 
-				// Sync audio fade with visual fade (throttled to every 3rd frame)
-				if (frameCounter % 3 === 0) {
-					let audioAmp = 0.3 * opacity;
-					osc.amp(audioAmp, 0.1); // Longer ramp for smoothness
+				// Sync audio fade with visual fade (throttled for performance)
+				if (frameCounter % AMPLITUDE_FADE_THROTTLE === 0) {
+					let audioAmp = AUDIO_AMPLITUDE * opacity;
+					osc.amp(audioAmp, AUDIO_FADE_OUT_TIME);
 				}
 			}
 
@@ -484,7 +539,7 @@ function spawnImage(x, y) {
 		} else {
 			// Remove element and stop audio
 			document.body.removeChild(img);
-			osc.amp(0, 0.1);
+			osc.amp(0, AUDIO_FADE_OUT_TIME);
 			osc.stop(0.2);
 
 			// Dispose of filter to free resources
@@ -501,23 +556,4 @@ function spawnImage(x, y) {
 	}
 
 	animate();
-}
-
-function mousePressed() {
-	if (!showProfile && fadeAmount === 0) {
-		let centerX = windowWidth / 2;
-		let centerY = windowHeight / 2;
-		let rectW = 200;
-		let rectH = 60;
-		let rectX = centerX - rectW/2;
-		let rectY = centerY - rectH/2;
-
-		if (mouseX > rectX && mouseX < rectX + rectW &&
-		    mouseY > rectY && mouseY < rectY + rectH) {
-			fadeAmount = 0.01;
-			return false;
-		}
-	}
-
-	spawnImage(mouseX, mouseY);
 }
