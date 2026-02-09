@@ -760,7 +760,6 @@ function spawnImage(x, y) {
 	ticker.textContent = tickerContent;
 	ticker.style.position = 'fixed';
 	ticker.style.left = TICKER_LEFT_MARGIN + 'px';
-	ticker.style.right = TICKER_RIGHT_MARGIN + 'px';
 	ticker.style.bottom = TICKER_BOTTOM_MARGIN + 'px';
 	ticker.style.padding = TICKER_PADDING + 'px';
 	ticker.style.background = 'radial-gradient(ellipse at center, rgba(0, 0, 0, 0.33) 0%, rgba(0, 0, 0, 0.165) 70%, rgba(0, 0, 0, 0) 100%)';
@@ -774,6 +773,8 @@ function spawnImage(x, y) {
 	ticker.style.pointerEvents = 'none';
 	ticker.style.wordWrap = 'break-word';
 	ticker.style.whiteSpace = 'pre-line';
+	ticker.style.width = 'fit-content';
+	ticker.style.maxWidth = 'calc(100vw - ' + (TICKER_LEFT_MARGIN + TICKER_RIGHT_MARGIN) + 'px)';
 
 	document.body.appendChild(ticker);
 
@@ -1020,7 +1021,6 @@ function spawnVideo(x, y) {
 	ticker.textContent = tickerContent;
 	ticker.style.position = 'fixed';
 	ticker.style.left = TICKER_LEFT_MARGIN + 'px';
-	ticker.style.right = TICKER_RIGHT_MARGIN + 'px';
 	ticker.style.bottom = TICKER_BOTTOM_MARGIN + 'px';
 	ticker.style.padding = TICKER_PADDING + 'px';
 	ticker.style.background = 'radial-gradient(ellipse at center, rgba(0, 0, 0, 0.33) 0%, rgba(0, 0, 0, 0.165) 70%, rgba(0, 0, 0, 0) 100%)';
@@ -1034,6 +1034,8 @@ function spawnVideo(x, y) {
 	ticker.style.pointerEvents = 'none';
 	ticker.style.wordWrap = 'break-word';
 	ticker.style.whiteSpace = 'pre-line';
+	ticker.style.width = 'fit-content';
+	ticker.style.maxWidth = 'calc(100vw - ' + (TICKER_LEFT_MARGIN + TICKER_RIGHT_MARGIN) + 'px)';
 
 	document.body.appendChild(ticker);
 
