@@ -11,14 +11,12 @@ coffee_glitch2.jpg
 coffee_machine.jpg
 coffee1.jpg
 coffee2.jpg
-coffee3.jpg
 conference.jpg
 deepwater_point.jpg
 disney.jpg
 friars.jpg
 lovers_leap.jpg
 maligne.jpg
-mission_chinese.jpg
 mission_window_sunset.jpg
 moose.jpg
 muni1.jpg
@@ -39,7 +37,6 @@ roo_beach.jpg
 roo_bernal_houses.jpg
 roo_bernal_sunrise.jpg
 roo_billygoat.jpg
-roo_billygoat2.jpg
 roo_bucket.jpg
 roo_bw.jpg
 roo_dolo.jpg
