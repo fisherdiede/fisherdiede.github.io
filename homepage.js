@@ -15,6 +15,8 @@ var activeOscillators = [];
 var reverb;
 var reverbBus;
 var audioUpdateCounter = 0;
+var minFrequency; // Calculated from EB_MAJOR_NOTES during setup
+var maxFrequency; // Calculated from EB_MAJOR_NOTES during setup
 
 // ==================== CONFIGURATION ====================
 // Animation settings
@@ -41,7 +43,7 @@ var VIBRATO_RATE_MAX = 10; // Hz - maximum vibrato speed
 var VIBRATO_DEPTH_MIN = 0.25; // Hz - minimum vibrato amount
 var VIBRATO_DEPTH_MAX = 1.5; // Hz - maximum vibrato amount
 var VIBRATO_RAMP_TIME = 0.1; // seconds - ramp time for vibrato frequency changes
-var FILTER_CUTOFF_MIN = 1000; // Hz - filter cutoff at screen edges
+var FILTER_CUTOFF_MIN; // Hz - filter cutoff at screen edges (calculated from highest note)
 var FILTER_CUTOFF_MAX = 12000; // Hz - filter cutoff at screen center
 var FILTER_RAMP_TIME = 0.02; // seconds - ramp time for filter frequency changes
 var FILTER_HOLD_RAMP_TIME = 0.2; // seconds - ramp time when holding filter at max
@@ -104,6 +106,11 @@ function setup() {
 	// Enable audio on user interaction (required for mobile browsers)
 	userStartAudio();
 
+	// Calculate frequency range for amplitude scaling and filter cutoff
+	minFrequency = Math.min(...EB_MAJOR_NOTES);
+	maxFrequency = Math.max(...EB_MAJOR_NOTES);
+	FILTER_CUTOFF_MIN = maxFrequency; // Set minimum filter cutoff to highest note frequency
+
 	// Load profile image
 	profileImg = loadImage('assets/img/fisher_diede_portrait.jpeg');
 
@@ -159,6 +166,20 @@ function isMouseOverButton(bounds) {
 	return !isTouchDevice &&
 		mouseX > bounds.x && mouseX < bounds.x + bounds.width &&
 		mouseY > bounds.y && mouseY < bounds.y + bounds.height;
+}
+
+function getAmplitudeForFrequency(freq) {
+	// Scale amplitude based on frequency to compensate for equal-loudness perception
+	// Lower frequencies need more amplitude to sound equally loud as higher frequencies
+	// Using a power curve to map frequency range to amplitude multiplier
+
+	// Normalize frequency to 0-1 range using pre-calculated min/max
+	let normalizedFreq = (freq - minFrequency) / (maxFrequency - minFrequency);
+
+	// Apply inverse power curve - low freq gets higher multiplier
+	let multiplier = 1 - (pow(normalizedFreq, 0.6) * 0.5); // Range: 1.0 (low) to 0.5 (high)
+
+	return AUDIO_AMPLITUDE * multiplier;
 }
 
 function updateAudioEffects(isHovering) {
@@ -453,14 +474,18 @@ function spawnImage(x, y) {
 
 	osc.start();
 
+	// Calculate frequency-based amplitude for perceptual balance
+	let targetAmplitude = getAmplitudeForFrequency(baseFrequency);
+
 	// Fade in
-	osc.amp(AUDIO_AMPLITUDE, AUDIO_FADE_IN_TIME);
+	osc.amp(targetAmplitude, AUDIO_FADE_IN_TIME);
 
 	// Track oscillator and filter for effects with randomized vibrato parameters
 	let oscData = {
 		osc: osc,
 		baseFreq: baseFrequency,
 		filter: filter,
+		amplitude: targetAmplitude, // Store frequency-adjusted amplitude
 		vibratoRate: random(VIBRATO_RATE_MIN, VIBRATO_RATE_MAX),
 		vibratoDepth: random(VIBRATO_DEPTH_MIN, VIBRATO_DEPTH_MAX),
 		enableVibrato: !showProfile // Only enable vibrato for sawtooth oscillators (welcome screen)
@@ -533,7 +558,7 @@ function spawnImage(x, y) {
 
 				// Sync audio fade with visual fade (throttled for performance)
 				if (frameCounter % AMPLITUDE_FADE_THROTTLE === 0) {
-					let audioAmp = AUDIO_AMPLITUDE * opacity;
+					let audioAmp = oscData.amplitude * opacity;
 					osc.amp(audioAmp, AUDIO_FADE_OUT_TIME);
 				}
 			}
