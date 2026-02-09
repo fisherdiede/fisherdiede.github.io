@@ -163,8 +163,7 @@ function getButtonBounds() {
 }
 
 function isMouseOverButton(bounds) {
-	return !isTouchDevice &&
-		mouseX > bounds.x && mouseX < bounds.x + bounds.width &&
+	return mouseX > bounds.x && mouseX < bounds.x + bounds.width &&
 		mouseY > bounds.y && mouseY < bounds.y + bounds.height;
 }
 
@@ -275,13 +274,16 @@ function drawWelcomeScreen() {
 	let centerY = windowHeight / 2;
 	let brightness = calculateWelcomeBrightness();
 
-	// Get button bounds and check hover state
+	// Get button bounds and check hover state (hover only on non-touch devices)
 	let buttonBounds = getButtonBounds();
-	let isHovering = isMouseOverButton(buttonBounds);
-	isHoveringWelcome = isHovering;
+	let isHovering = !isTouchDevice && isMouseOverButton(buttonBounds);
+	// On touch devices, treat button press/transition as "hovering" for audio effects
+	let isTransitioning = fadeAmount > 0;
+	let shouldApplyEffects = isHovering || (isTouchDevice && isTransitioning);
+	isHoveringWelcome = shouldApplyEffects;
 
 	// Update audio effects
-	updateAudioEffects(isHovering);
+	updateAudioEffects(shouldApplyEffects);
 
 	// Use hover appearance for touch devices or when hovering
 	let useHoverAppearance = isTouchDevice || isHovering;
@@ -466,7 +468,7 @@ function spawnImage(x, y) {
 	let filter = new p5.LowPass();
 	osc.disconnect();
 	osc.connect(filter);
-	filter.freq(FILTER_CUTOFF_MIN); // Start with cutoff at minimum
+	filter.freq(FILTER_CUTOFF_MAX);
 
 	// Connect filter to main output and reverb bus
 	filter.connect(); // Main output (dry signal)
