@@ -4,12 +4,20 @@ var showProfile = false;
 var fadeAmount = 0;
 var profileImg;
 var spawnerImages = [];
+var spawnerVideos = [];
 var imageOrder = [];
+var videoOrder = [];
 var currentImageIndex = 0;
+var currentVideoIndex = 0;
+var imagesSinceLastVideo = 0;
+var videoIsPlaying = false;
 var imagesLoaded = false;
+var videosLoaded = false;
 var isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 var wasHovering = false;
 var isHoveringWelcome = false;
+var checkerboardOpacity = 0;
+var checkerboardTargetOpacity = 0;
 var lastPlayedNote = -1;
 var activeOscillators = [];
 var reverb;
@@ -22,8 +30,8 @@ var maxFrequency; // Calculated from EB_MAJOR_NOTES during setup
 // ==================== CONFIGURATION ====================
 // Animation settings
 var ANIMATION_DURATION = 10; // Total animation time in seconds
-var FADE_START_TIME = 4; // When to start fading out
-var FADE_INCREMENT = 0.05; // How fast screens fade
+var FADE_START_TIME = 3; // When to start fading out
+var PAGE_FADE_DURATION = 4; // seconds - how long page transitions take
 var SCALE_GROWTH = 2; // How much to grow (1 = no growth, 2 = double size)
 var SPEED_MIN = 0.05;
 var SPEED_MAX = 0.1;
@@ -34,8 +42,10 @@ var SIZE_MAX = 200;
 var BUTTON_WIDTH = 200;
 var BUTTON_HEIGHT = 60;
 var BUTTON_RADIUS = 10;
+var BUTTON_FADE_DURATION = 0.25; // seconds - how long welcome button fades when clicked
 var CHECKERBOARD_SQUARE_SIZE = 7;
 var CHECKERBOARD_OPACITY = 84;
+var CHECKERBOARD_FADE_TIME = 0.6; // seconds - how long to fade in checkerboard on hover
 
 // Audio settings
 var ENABLE_VIBRATO = true; // Set to true to enable vibrato effect on hover
@@ -45,7 +55,7 @@ var VIBRATO_DEPTH_MIN = 0.25; // Hz - minimum vibrato amount
 var VIBRATO_DEPTH_MAX = 1.5; // Hz - maximum vibrato amount
 var VIBRATO_RAMP_TIME = 0.1; // seconds - ramp time for vibrato frequency changes
 var FILTER_CUTOFF_MIN; // Hz - filter cutoff at screen edges (calculated from highest note)
-var FILTER_CUTOFF_MAX = 12000; // Hz - filter cutoff at screen center
+var FILTER_CUTOFF_MAX = 5000; // Hz - filter cutoff at screen center
 var FILTER_RAMP_TIME = 0.02; // seconds - ramp time for filter frequency changes
 var FILTER_HOLD_RAMP_TIME = 0.2; // seconds - ramp time when holding filter at max
 var AUDIO_FADE_IN_TIME = 0.1; // seconds - oscillator fade in time
@@ -54,12 +64,21 @@ var AUDIO_AMPLITUDE = 0.3; // oscillator amplitude
 var SUBTLE_REVERB_DURATION = 2; // seconds - subtle reverb duration
 var SUBTLE_REVERB_DECAY = 2; // decay rate for subtle reverb
 var SUBTLE_REVERB_DRYWET = 0.2; // 20% wet, 80% dry
-var REVERB_FADE_TIME = 0.0; // seconds - fade time for reverb bus send
+var REVERB_FADE_IN_TIME = 0.0; // seconds - fade in time for reverb bus send
+var REVERB_FADE_OUT_TIME = 10.0; // seconds - fade out time for reverb bus send
 var REVERB_DURATION = 6; // seconds - reverb duration
 var REVERB_DECAY = 3; // decay rate (higher = more intense)
 var REVERB_DRYWET = 1; // 0 = fully dry, 1 = fully wet
 var AUDIO_UPDATE_THROTTLE = 3; // Update vibrato every N frames
 var AMPLITUDE_FADE_THROTTLE = 3; // Update amplitude fade every N frames
+
+// Video audio effects settings
+var VIDEO_FILTER_FREQ = 4000; // Hz - lowpass filter cutoff frequency
+var VIDEO_REVERB_DURATION = 8; // seconds - reverb duration (increased for intensity)
+var VIDEO_REVERB_DECAY = 3; // decay rate (increased for intensity)
+var VIDEO_AUDIO_FADE_DURATION = 1; // seconds - how long before end to start fading video audio
+var MIN_IMAGES_BEFORE_VIDEO = 4; // minimum number of images to spawn before allowing a video
+var VIDEO_SPAWN_PROBABILITY = 0.1; // probability (0-1) of spawning a video when eligible
 
 // Eb major scale frequencies (across multiple octaves)
 var EB_MAJOR_NOTES = [
@@ -121,6 +140,9 @@ function setup() {
 	// Load spawner images from manifest
 	loadStrings('assets/img/spawner/manifest.txt', onManifestLoaded);
 
+	// Load spawner videos from manifest
+	loadStrings('assets/img/spawner/movie/manifest.txt', onVideoManifestLoaded);
+
 	// Initialize subtle reverb for always-on ambient effect
 	subtleReverb = new p5.Reverb();
 	subtleReverb.set(SUBTLE_REVERB_DURATION, SUBTLE_REVERB_DECAY);
@@ -150,6 +172,23 @@ function onManifestLoaded(manifest) {
 	shuffleArray(imageOrder);
 	imagesLoaded = true;
 	console.log('Spawner images loaded:', spawnerImages.length, 'images');
+}
+
+function onVideoManifestLoaded(manifest) {
+	for (let i = 0; i < manifest.length; i++) {
+		let filename = manifest[i].trim();
+		if (filename) {
+			spawnerVideos.push('assets/img/spawner/movie/' + filename);
+		}
+	}
+
+	// Create randomized order
+	for (let i = 0; i < spawnerVideos.length; i++) {
+		videoOrder.push(i);
+	}
+	shuffleArray(videoOrder);
+	videosLoaded = true;
+	console.log('Spawner videos loaded:', spawnerVideos.length, 'videos');
 }
 
 // ==================== HELPER FUNCTIONS ====================
@@ -214,7 +253,7 @@ function updateAudioEffects(isHovering) {
 		}
 
 		// Activate reverb bus send
-		reverbBus.amp(1, REVERB_FADE_TIME);
+		reverbBus.amp(1, REVERB_FADE_IN_TIME);
 	} else {
 		// Reset to base frequency when not hovering and not on profile
 		if (ENABLE_VIBRATO && wasHovering) {
@@ -226,7 +265,7 @@ function updateAudioEffects(isHovering) {
 		}
 
 		// Deactivate reverb bus send
-		reverbBus.amp(0, REVERB_FADE_TIME);
+		reverbBus.amp(0, REVERB_FADE_OUT_TIME);
 	}
 
 	wasHovering = isHovering;
@@ -265,17 +304,40 @@ function calculateWelcomeBrightness() {
 	}
 }
 
-function drawCheckerboard() {
+function drawCheckerboard(opacity) {
 	noStroke();
 	for (let x = 0; x < windowWidth; x += CHECKERBOARD_SQUARE_SIZE) {
 		for (let y = 0; y < windowHeight; y += CHECKERBOARD_SQUARE_SIZE) {
 			// Alternate between black and transparent
 			if ((x / CHECKERBOARD_SQUARE_SIZE + y / CHECKERBOARD_SQUARE_SIZE) % 2 === 0) {
-				fill(0, CHECKERBOARD_OPACITY);
+				fill(0, opacity);
 				rect(x, y, CHECKERBOARD_SQUARE_SIZE, CHECKERBOARD_SQUARE_SIZE);
 			}
 		}
 	}
+}
+
+function drawGradientRect(x, y, w, h, radius, centerAlpha) {
+	// Draw rounded rectangle with gradient edges that fade to transparent
+	push();
+	drawingContext.save();
+
+	// Create radial gradient from center to edges
+	let gradient = drawingContext.createRadialGradient(
+		x + w / 2, y + h / 2, 0,
+		x + w / 2, y + h / 2, Math.max(w, h) / 2
+	);
+	gradient.addColorStop(0, `rgba(0, 0, 0, ${centerAlpha})`);
+	gradient.addColorStop(0.7, `rgba(0, 0, 0, ${centerAlpha * 0.5})`);
+	gradient.addColorStop(1, `rgba(0, 0, 0, 0)`);
+
+	drawingContext.fillStyle = gradient;
+	drawingContext.beginPath();
+	drawingContext.roundRect(x, y, w, h, radius);
+	drawingContext.fill();
+
+	drawingContext.restore();
+	pop();
 }
 
 function drawWelcomeScreen() {
@@ -294,19 +356,34 @@ function drawWelcomeScreen() {
 	// Update audio effects
 	updateAudioEffects(shouldApplyEffects);
 
+	// Animate checkerboard opacity on hover or during transition
+	if (isHovering || isTransitioning) {
+		checkerboardTargetOpacity = CHECKERBOARD_OPACITY;
+	} else {
+		checkerboardTargetOpacity = 0;
+	}
+
+	// Smooth transition using lerp (60fps = ~0.0167s per frame)
+	let fadeSpeed = deltaTime / (CHECKERBOARD_FADE_TIME * 1000);
+	checkerboardOpacity = lerp(checkerboardOpacity, checkerboardTargetOpacity, fadeSpeed);
+
 	// Use hover appearance for touch devices or when hovering
 	let useHoverAppearance = isTouchDevice || isHovering;
 
-	// Draw checkerboard behind button on hover
-	if (isHovering) {
-		drawCheckerboard();
+	// Calculate button opacity based on fade state
+	let buttonOpacity = 1 - fadeAmount;
+
+	// Draw checkerboard behind button (always, but with animated opacity)
+	// Checkerboard fades independently - not affected by button fade
+	if (checkerboardOpacity > 0.1) {
+		drawCheckerboard(checkerboardOpacity);
 	}
 
 	// Draw button background
 	if (useHoverAppearance) {
-		fill(15, 255);
+		fill(15, 255 * buttonOpacity);
 	} else {
-		fill(0, brightness);
+		fill(0, brightness * buttonOpacity);
 	}
 	noStroke();
 	rect(buttonBounds.x, buttonBounds.y, buttonBounds.width, buttonBounds.height, BUTTON_RADIUS);
@@ -314,18 +391,18 @@ function drawWelcomeScreen() {
 	// Draw button border
 	noFill();
 	if (useHoverAppearance) {
-		stroke(255);
+		stroke(255, 255 * buttonOpacity);
 	} else {
-		stroke(Math.floor(brightness));
+		stroke(Math.floor(brightness), 255 * buttonOpacity);
 	}
 	strokeWeight(2);
 	rect(buttonBounds.x, buttonBounds.y, buttonBounds.width, buttonBounds.height, BUTTON_RADIUS);
 
 	// Draw welcome text
 	if (useHoverAppearance) {
-		fill(255);
+		fill(255, 255 * buttonOpacity);
 	} else {
-		fill(Math.floor(brightness));
+		fill(Math.floor(brightness), 255 * buttonOpacity);
 	}
 	noStroke();
 	textFont("Courier New");
@@ -335,7 +412,8 @@ function drawWelcomeScreen() {
 
 	// Animate fade transition
 	if (fadeAmount > 0) {
-		fadeAmount += FADE_INCREMENT;
+		let fadeIncrement = deltaTime / (BUTTON_FADE_DURATION * 1000);
+		fadeAmount += fadeIncrement;
 		if (fadeAmount >= 1) {
 			showProfile = true;
 			fadeAmount = 0;
@@ -345,26 +423,25 @@ function drawWelcomeScreen() {
 
 function drawProfileScreen() {
 	isHoveringWelcome = false;
-	fadeAmount = min(fadeAmount + FADE_INCREMENT, 1);
+	let fadeIncrement = deltaTime / (PAGE_FADE_DURATION * 1000);
+	fadeAmount = min(fadeAmount + fadeIncrement, 1);
 	let alpha = 255 * fadeAmount;
 
 	// Continue updating audio effects for active oscillators
 	updateAudioEffects(false);
 
-	// Draw checkerboard background
-	drawCheckerboard();
+	// Draw checkerboard background at full opacity
+	drawCheckerboard(CHECKERBOARD_OPACITY);
 
 	let centerX = windowWidth / 2;
 	let centerY = windowHeight / 2;
 
-	// Draw black background behind name
-	fill(0, alpha * 0.2);
-	noStroke();
+	// Draw gradient background behind name
 	let nameW = 280;
 	let nameH = 50;
 	let nameX = centerX - nameW/2;
 	let nameY = centerY - 145;
-	rect(nameX, nameY, nameW, nameH, 15);
+	drawGradientRect(nameX, nameY, nameW, nameH, 15, fadeAmount * 0.33);
 
 	fill(255, alpha);
 	textFont("Courier New");
@@ -402,20 +479,23 @@ function drawProfileScreen() {
 	drawingContext.restore();
 	pop();
 
-	// Circle border
+	// Circle borders - black outer, white inner
 	noFill();
+	// Black outer border (subtle, matches background opacity)
+	stroke(0, alpha * 0.33);
+	strokeWeight(2);
+	circle(centerX, centerY - 30, 104);
+	// White inner border
 	stroke(255, alpha);
 	strokeWeight(2);
 	circle(centerX, centerY - 30, 100);
 
-	// Draw black background behind bio and email
-	fill(0, alpha * 0.2);
-	noStroke();
+	// Draw gradient background behind bio and email
 	let bioW = 280;
 	let bioH = 70;
 	let bioX = centerX - bioW/2;
 	let bioY = centerY + 40;
-	rect(bioX, bioY, bioW, bioH, 15);
+	drawGradientRect(bioX, bioY, bioW, bioH, 15, fadeAmount * 0.33);
 
 	// Bio
 	strokeWeight(1);
@@ -443,10 +523,45 @@ function mousePressed() {
 		}
 	}
 
-	spawnImage(mouseX, mouseY);
+	spawnMedia(mouseX, mouseY);
 }
 
 // ==================== IMAGE SPAWNING & AUDIO ====================
+function spawnMedia(x, y) {
+	// Block spawning if a video is currently playing
+	if (videoIsPlaying) {
+		console.log('Spawn blocked - video is playing');
+		return;
+	}
+
+	// Check if both images and videos are loaded
+	let canSpawnImage = imagesLoaded && spawnerImages.length > 0;
+	let canSpawnVideo = videosLoaded && spawnerVideos.length > 0;
+
+	if (!canSpawnImage && !canSpawnVideo) {
+		console.log('Spawn blocked - no media loaded');
+		return;
+	}
+
+	// Video can only spawn if at least MIN_IMAGES_BEFORE_VIDEO images have been spawned since last video
+	let shouldConsiderVideo = canSpawnVideo && imagesSinceLastVideo >= MIN_IMAGES_BEFORE_VIDEO;
+
+	if (shouldConsiderVideo) {
+		// VIDEO_SPAWN_PROBABILITY chance to spawn video
+		if (random() < VIDEO_SPAWN_PROBABILITY) {
+			spawnVideo(x, y);
+			imagesSinceLastVideo = 0; // Reset counter after spawning video
+		} else {
+			spawnImage(x, y);
+			imagesSinceLastVideo++;
+		}
+	} else {
+		// Always spawn image if video conditions not met
+		spawnImage(x, y);
+		imagesSinceLastVideo++;
+	}
+}
+
 function spawnImage(x, y) {
 	if (!imagesLoaded || spawnerImages.length === 0) {
 		console.log('Spawn blocked - imagesLoaded:', imagesLoaded, 'spawnerImages.length:', spawnerImages.length);
@@ -482,11 +597,18 @@ function spawnImage(x, y) {
 	osc.connect(filter);
 	filter.freq(FILTER_CUTOFF_MAX);
 
-	// Connect filter to outputs
+	// Create stereo panner for spatial audio
+	let audioContext = getAudioContext();
+	let panner = audioContext.createStereoPanner();
+
+	// Connect filter to outputs through panner
+	filter.disconnect();
+	filter.connect(panner);
+
 	// Route through subtle reverb (always-on, outputs to master with dry/wet mix)
-	filter.connect(subtleReverb);
+	panner.connect(subtleReverb.input);
 	// Also connect to reverb bus for intense hover/profile effect
-	filter.connect(reverbBus);
+	panner.connect(reverbBus);
 
 	osc.start();
 
@@ -501,6 +623,7 @@ function spawnImage(x, y) {
 		osc: osc,
 		baseFreq: baseFrequency,
 		filter: filter,
+		panner: panner,
 		amplitude: targetAmplitude, // Store frequency-adjusted amplitude
 		vibratoRate: random(VIBRATO_RATE_MIN, VIBRATO_RATE_MAX),
 		vibratoDepth: random(VIBRATO_DEPTH_MIN, VIBRATO_DEPTH_MAX),
@@ -563,13 +686,22 @@ function spawnImage(x, y) {
 			img.style.left = newX + 'px';
 			img.style.top = newY + 'px';
 
+			// Update stereo panning based on position
+			// Map x position to pan value: -1 (left) to 1 (right)
+			let panValue = (newX / windowWidth) * 2 - 1;
+			panValue = constrain(panValue, -1, 1);
+			panner.pan.value = panValue;
+
 			// Expand gradually
 			let scale = 1 + (elapsed / ANIMATION_DURATION) * SCALE_GROWTH;
 			img.style.transform = `translate(-50%, -50%) scale(${scale})`;
 
 			// Fade out visuals and audio
 			if (elapsed > FADE_START_TIME) {
-				let opacity = 1 - (elapsed - FADE_START_TIME) / (ANIMATION_DURATION - FADE_START_TIME);
+				let fadeProgress = (elapsed - FADE_START_TIME) / (ANIMATION_DURATION - FADE_START_TIME);
+				// Apply ease-in-ease-out curve (smoothstep)
+				let easedProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
+				let opacity = 1 - easedProgress;
 				img.style.opacity = opacity;
 
 				// Sync audio fade with visual fade (throttled for performance)
@@ -588,14 +720,288 @@ function spawnImage(x, y) {
 			osc.amp(0, AUDIO_FADE_OUT_TIME);
 			osc.stop(0.2);
 
-			// Dispose of filter to free resources
+			// Dispose of audio nodes to free resources
 			filter.dispose();
+			panner.disconnect();
 
 			// Remove from active oscillators array
 			let index = activeOscillators.findIndex(item => item.osc === osc);
 			if (index !== -1) {
 				activeOscillators.splice(index, 1);
 			}
+
+			cancelAnimationFrame(animationFrame);
+		}
+	}
+
+	animate();
+}
+
+function spawnVideo(x, y) {
+	if (!videosLoaded || spawnerVideos.length === 0) {
+		console.log('Spawn blocked - videosLoaded:', videosLoaded, 'spawnerVideos.length:', spawnerVideos.length);
+		return;
+	}
+
+	// Set flag to block other spawns while video is playing
+	videoIsPlaying = true;
+
+	// Get next video in shuffled order
+	let videoIndex = videoOrder[currentVideoIndex];
+	currentVideoIndex = (currentVideoIndex + 1) % videoOrder.length;
+
+	// Select random note from Eb major scale (avoid repeating the last note)
+	let frequency;
+	if (EB_MAJOR_NOTES.length > 1) {
+		do {
+			frequency = random(EB_MAJOR_NOTES);
+		} while (frequency === lastPlayedNote);
+	} else {
+		frequency = random(EB_MAJOR_NOTES);
+	}
+	lastPlayedNote = frequency;
+
+	// Create oscillator with lowpass filter
+	// Use sine wave if profile is showing, sawtooth otherwise
+	let oscType = showProfile ? 'sine' : 'sawtooth';
+	let osc = new p5.Oscillator(oscType);
+	let baseFrequency = frequency; // Store base frequency
+	osc.freq(baseFrequency);
+	osc.amp(0);
+
+	// Create lowpass filter
+	let filter = new p5.LowPass();
+	osc.disconnect();
+	osc.connect(filter);
+	filter.freq(FILTER_CUTOFF_MAX);
+
+	// Create stereo panner for spatial audio
+	let audioContext = getAudioContext();
+	let panner = audioContext.createStereoPanner();
+
+	// Connect filter to outputs through panner
+	filter.disconnect();
+	filter.connect(panner);
+
+	// Route through subtle reverb (always-on, outputs to master with dry/wet mix)
+	panner.connect(subtleReverb.input);
+	// Also connect to reverb bus for intense hover/profile effect
+	panner.connect(reverbBus);
+
+	osc.start();
+
+	// Calculate frequency-based amplitude for perceptual balance
+	let targetAmplitude = getAmplitudeForFrequency(baseFrequency);
+
+	// Fade in
+	osc.amp(targetAmplitude, AUDIO_FADE_IN_TIME);
+
+	// Track oscillator and filter for effects with randomized vibrato parameters
+	let oscData = {
+		osc: osc,
+		baseFreq: baseFrequency,
+		filter: filter,
+		panner: panner,
+		amplitude: targetAmplitude, // Store frequency-adjusted amplitude
+		vibratoRate: random(VIBRATO_RATE_MIN, VIBRATO_RATE_MAX),
+		vibratoDepth: random(VIBRATO_DEPTH_MIN, VIBRATO_DEPTH_MAX),
+		enableVibrato: !showProfile // Only enable vibrato for sawtooth oscillators (welcome screen)
+	};
+	activeOscillators.push(oscData);
+
+	// Create video element
+	let video = document.createElement('video');
+	video.src = spawnerVideos[videoIndex];
+	video.style.position = 'absolute';
+	video.style.left = x + 'px';
+	video.style.top = y + 'px';
+	video.style.maxWidth = SIZE_MAX + 'px';
+	video.style.maxHeight = SIZE_MAX + 'px';
+	video.style.objectFit = 'contain';
+	video.style.pointerEvents = 'none';
+	video.style.zIndex = '10';
+	video.style.transform = 'translate(-50%, -50%)';
+	video.style.transition = 'opacity 1s ease-out';
+	video.autoplay = true;
+	video.muted = true; // Mute video element, we'll play audio separately
+	video.loop = false;
+	video.playsInline = true; // For iOS compatibility
+
+	// Adjust playback rate to stretch video to fill animation duration
+	video.addEventListener('loadedmetadata', function() {
+		video.playbackRate = video.duration / ANIMATION_DURATION;
+	});
+
+	document.body.appendChild(video);
+
+	// Load and play audio separately at normal speed to avoid choppy playback
+	let audioSource = null;
+	let audioBuffer = null;
+
+	// Initialize storage object for audio nodes
+	let videoAudioNodes = {};
+
+	// Fetch and decode audio from video file
+	fetch(spawnerVideos[videoIndex])
+		.then(response => response.arrayBuffer())
+		.then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
+		.then(buffer => {
+			audioBuffer = buffer;
+
+			// Create buffer source
+			audioSource = audioContext.createBufferSource();
+			audioSource.buffer = audioBuffer;
+
+			// Create lowpass filter
+			let videoFilter = audioContext.createBiquadFilter();
+			videoFilter.type = 'lowpass';
+			videoFilter.frequency.value = VIDEO_FILTER_FREQ;
+
+			// Create reverb using p5.Reverb
+			let videoReverb = new p5.Reverb();
+			videoReverb.set(VIDEO_REVERB_DURATION, VIDEO_REVERB_DECAY);
+			videoReverb.drywet(0.8); // 80% wet/dry mix for intense reverb
+
+			// Create gain node for volume control (for fading)
+			let videoGain = audioContext.createGain();
+			videoGain.gain.value = 1.0;
+
+			// Create stereo panner for spatial audio
+			let videoPanner = audioContext.createStereoPanner();
+
+			// Connect the chain: audioSource -> filter -> gain -> panner -> reverb -> output
+			audioSource.connect(videoFilter);
+			videoFilter.connect(videoGain);
+			videoGain.connect(videoPanner);
+			videoPanner.connect(videoReverb.input);
+
+			// Store references for cleanup
+			videoAudioNodes.source = audioSource;
+			videoAudioNodes.filter = videoFilter;
+			videoAudioNodes.reverb = videoReverb;
+			videoAudioNodes.gain = videoGain;
+			videoAudioNodes.panner = videoPanner;
+
+			// Start audio playback
+			audioSource.start();
+		})
+		.catch(err => {
+			console.log('Error loading video audio:', err);
+		});
+
+	// Random movement
+	let angle = random(TWO_PI);
+	let speed = random(SPEED_MIN, SPEED_MAX);
+	let vx = cos(angle) * speed;
+	let vy = sin(angle) * speed;
+
+	// Animate movement
+	let startTime = Date.now();
+	let animationFrame;
+	let frameCounter = 0; // Throttle filter updates
+
+	function animate() {
+		let elapsed = (Date.now() - startTime) / 1000;
+		frameCounter++;
+
+		if (elapsed < ANIMATION_DURATION) {
+			// Calculate mouse proximity for filter modulation
+			// Only respond to cursor on welcome screen, not on profile screen
+			if (!isTouchDevice && !isHoveringWelcome && !showProfile) {
+				let centerX = windowWidth / 2;
+				let centerY = windowHeight / 2;
+				let d = dist(mouseX, mouseY, centerX, centerY);
+				let maxDist = dist(0, 0, centerX, centerY);
+				let normalizedDist = constrain(d / maxDist, 0, 1);
+
+				// Apply exponential curve (inverse so closer = higher cutoff)
+				let exponentialFactor = pow(1 - normalizedDist, 3);
+
+				// Map cutoff from min (edges) to max (center)
+				let cutoffFreq = FILTER_CUTOFF_MIN + (exponentialFactor * (FILTER_CUTOFF_MAX - FILTER_CUTOFF_MIN));
+				filter.freq(cutoffFreq, FILTER_RAMP_TIME);
+			}
+
+			// Move
+			let newX = x + vx * elapsed * 60;
+			let newY = y + vy * elapsed * 60;
+			video.style.left = newX + 'px';
+			video.style.top = newY + 'px';
+
+			// Update stereo panning based on position
+			// Map x position to pan value: -1 (left) to 1 (right)
+			if (videoAudioNodes.panner) {
+				let panValue = (newX / windowWidth) * 2 - 1;
+				panValue = constrain(panValue, -1, 1);
+				videoAudioNodes.panner.pan.value = panValue;
+			}
+
+			// Expand gradually
+			let scale = 1 + (elapsed / ANIMATION_DURATION) * SCALE_GROWTH;
+			video.style.transform = `translate(-50%, -50%) scale(${scale})`;
+
+			// Fade out visuals and audio
+			if (elapsed > FADE_START_TIME) {
+				let fadeProgress = (elapsed - FADE_START_TIME) / (ANIMATION_DURATION - FADE_START_TIME);
+				// Apply ease-in-ease-out curve (smoothstep)
+				let easedProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
+				let opacity = 1 - easedProgress;
+				video.style.opacity = opacity;
+
+				// Sync audio fade with visual fade (throttled for performance)
+				// Apply exponential curve for more natural-sounding audio fade
+				if (frameCounter % AMPLITUDE_FADE_THROTTLE === 0) {
+					let audioOpacity = pow(opacity, 2); // Exponential fade curve
+					let audioAmp = oscData.amplitude * audioOpacity;
+					osc.amp(audioAmp, AUDIO_FADE_OUT_TIME);
+
+					// Fade video audio only in the last VIDEO_AUDIO_FADE_DURATION seconds
+					if (elapsed > ANIMATION_DURATION - VIDEO_AUDIO_FADE_DURATION) {
+						let videoAudioOpacity = (ANIMATION_DURATION - elapsed) / VIDEO_AUDIO_FADE_DURATION;
+						videoAudioOpacity = pow(videoAudioOpacity, 2); // Exponential fade curve
+						if (videoAudioNodes.gain) {
+							videoAudioNodes.gain.gain.value = videoAudioOpacity;
+						}
+					}
+				}
+			}
+
+			animationFrame = requestAnimationFrame(animate);
+		} else {
+			// Remove element and stop audio
+			document.body.removeChild(video);
+			osc.amp(0, AUDIO_FADE_OUT_TIME);
+			osc.stop(0.2);
+
+			// Dispose of filter to free resources
+			filter.dispose();
+
+			// Clean up video audio nodes
+			if (videoAudioNodes.source) {
+				videoAudioNodes.source.stop();
+				videoAudioNodes.source.disconnect();
+			}
+			if (videoAudioNodes.filter) {
+				videoAudioNodes.filter.disconnect();
+			}
+			if (videoAudioNodes.gain) {
+				videoAudioNodes.gain.disconnect();
+			}
+			if (videoAudioNodes.panner) {
+				videoAudioNodes.panner.disconnect();
+			}
+			if (videoAudioNodes.reverb) {
+				videoAudioNodes.reverb.dispose();
+			}
+
+			// Remove from active oscillators array
+			let index = activeOscillators.findIndex(item => item.osc === osc);
+			if (index !== -1) {
+				activeOscillators.splice(index, 1);
+			}
+
+			// Reset flag to allow spawning again
+			videoIsPlaying = false;
 
 			cancelAnimationFrame(animationFrame);
 		}
