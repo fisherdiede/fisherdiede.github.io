@@ -1,0 +1,8 @@
+# Biebl video manifest
+# Add videos in the format: filename | caption | time | place
+
+1.mp4 | biebl performance 1
+2.mp4 | biebl performance 2
+3.mp4 | biebl performance 3
+4.mp4 | biebl performance 4
+5.mp4 | biebl performance 5

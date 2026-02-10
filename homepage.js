@@ -1,307 +1,141 @@
-// ==================== GLOBAL STATE ====================
-var canvas;
-var checkerboardDiv;
-var showProfile = false;
-var fadeAmount = 0;
-var profileImg;
-var spawnerImages = [];
-var spawnerVideos = [];
-var imageOrder = [];
-var videoOrder = [];
-var currentImageIndex = 0;
-var currentVideoIndex = 0;
-var imagesSinceLastVideo = 0;
-var videoIsPlaying = false;
-var imagesLoaded = false;
-var videosLoaded = false;
-var isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-var hasSpawnedMedia = false;
-var audioNoticeOpacity = 1.0;
-var wasHovering = false;
-var isHoveringWelcome = false;
-var checkerboardOpacity = 0;
-var checkerboardTargetOpacity = 0;
-var lastPlayedNote = -1;
-var activeOscillators = [];
-var activeTickers = []; // Track active ticker text boxes
-var reverb;
-var reverbBus;
-var subtleReverb; // Always-on subtle reverb
-var audioUpdateCounter = 0;
-var minFrequency; // Calculated from EB_MAJOR_NOTES during setup
-var maxFrequency; // Calculated from EB_MAJOR_NOTES during setup
+// ==================== STATE AND CONFIG ====================
+// appState and CONFIG are loaded from state.js and config.js
+// They are available globally via window.appState and window.CONFIG
 
-// ==================== CONFIGURATION ====================
-// Animation settings
-var ANIMATION_DURATION = 10; // Total animation time in seconds
-var FADE_START_TIME = 3; // When to start fading out
-var PAGE_FADE_DURATION = 4; // seconds - how long page transitions take
-var SCALE_GROWTH = 2; // How much to grow (1 = no growth, 2 = double size)
-var SPEED_MIN = 0.05;
-var SPEED_MAX = 0.1;
-var SIZE_MIN = 150;
-var SIZE_MAX = 250;
-
-// UI settings
-var BUTTON_WIDTH = 200;
-var BUTTON_HEIGHT = 60;
-var BUTTON_RADIUS = 10;
-var BUTTON_FADE_DURATION = 0.25; // seconds - how long welcome button fades when clicked
-var CHECKERBOARD_SQUARE_SIZE = 3;
-var CHECKERBOARD_OPACITY = 84;
-var CHECKERBOARD_FADE_TIME = 0.6; // seconds - how long to fade in checkerboard on hover
-
-// Ticker settings
-var TICKER_LEFT_MARGIN = 20; // pixels from left edge
-var TICKER_RIGHT_MARGIN = 20; // pixels from right edge
-var TICKER_BOTTOM_MARGIN = 20; // pixels from bottom edge
-var TICKER_PADDING = 10; // pixels padding inside ticker box
-var TICKER_SPACING = 10; // pixels between ticker boxes
-var TICKER_FONT_SIZE = 14;
-
-// Audio settings
-var ENABLE_VIBRATO = true; // Set to true to enable vibrato effect on hover
-var VIBRATO_RATE_MIN = 0.5; // Hz - minimum vibrato speed
-var VIBRATO_RATE_MAX = 10; // Hz - maximum vibrato speed
-var VIBRATO_DEPTH_MIN = 0.25; // Hz - minimum vibrato amount
-var VIBRATO_DEPTH_MAX = 1.5; // Hz - maximum vibrato amount
-var VIBRATO_RAMP_TIME = 0.1; // seconds - ramp time for vibrato frequency changes
-var FILTER_CUTOFF_MIN; // Hz - filter cutoff at screen edges (calculated from highest note)
-var FILTER_CUTOFF_MAX = 5000; // Hz - filter cutoff at screen center
-var FILTER_RAMP_TIME = 0.02; // seconds - ramp time for filter frequency changes
-var FILTER_HOLD_RAMP_TIME = 0.2; // seconds - ramp time when holding filter at max
-var AUDIO_FADE_IN_TIME = 0.1; // seconds - oscillator fade in time
-var AUDIO_FADE_OUT_TIME = 0.1; // seconds - oscillator fade out time
-var AUDIO_AMPLITUDE = 0.3; // oscillator amplitude
-var SUBTLE_REVERB_DURATION = 2; // seconds - subtle reverb duration
-var SUBTLE_REVERB_DECAY = 2; // decay rate for subtle reverb
-var SUBTLE_REVERB_DRYWET = 0.2; // 20% wet, 80% dry
-var REVERB_FADE_IN_TIME = 0.0; // seconds - fade in time for reverb bus send
-var REVERB_FADE_OUT_TIME = 10.0; // seconds - fade out time for reverb bus send
-var REVERB_DURATION = 6; // seconds - reverb duration
-var REVERB_DECAY = 3; // decay rate (higher = more intense)
-var REVERB_DRYWET = 1; // 0 = fully dry, 1 = fully wet
-var AUDIO_UPDATE_THROTTLE = 3; // Update vibrato every N frames
-var AMPLITUDE_FADE_THROTTLE = 3; // Update amplitude fade every N frames
-
-// Video audio effects settings
-var VIDEO_FILTER_FREQ = 4000; // Hz - lowpass filter cutoff frequency
-var VIDEO_REVERB_DURATION = 8; // seconds - reverb duration (increased for intensity)
-var VIDEO_REVERB_DECAY = 3; // decay rate (increased for intensity)
-var VIDEO_AUDIO_FADE_DURATION = 1; // seconds - how long before end to start fading video audio
-var MIN_IMAGES_BEFORE_VIDEO = 4; // minimum number of images to spawn before allowing a video
-var VIDEO_SPAWN_PROBABILITY = 0.1; // probability (0-1) of spawning a video when eligible
-
-// Eb major scale frequencies (across multiple octaves)
-var EB_MAJOR_NOTES = [
-	77.78,  // Eb2
-    77.78,  // Eb2
-    77.78,  // Eb2
-    77.78,  // Eb2
-	87.31,  // F2
-	98.00,  // G2
-	103.83, // Ab2
-	116.54, // Bb2
-	130.81, // C3
-	146.83, // D3
-	155.56, // Eb3
-    155.56, // Eb3
-    155.56, // Eb3
-	174.61, // F3
-	196.00, // G3
-	207.65, // Ab3
-	233.08, // Bb3
-	261.63, // C4
-	293.66, // D4
-	311.13, // Eb4
-	349.23, // F4
-	392.00, // G4
-	415.30, // Ab4
-	466.16, // Bb4
-	523.25, // C5
-	587.33, // D5
-	622.25, // Eb5
-    622.25, // Eb5
-	698.46, // F5
-	783.99, // G5
-	830.61, // Ab5
-	932.33, // Bb5
-	1046.50, // C6
-	1174.66, // D6
-	1244.51  // Eb6
-];
+// ==================== ENGINES ====================
+let audioEngine;
+let visualEngine;
+let mediaController;
+let uiEngine;
 
 // ==================== SETUP & INITIALIZATION ====================
 function setup() {
-	console.log("homepage setup");
+	// Initialize audio engine
+	audioEngine = new AudioEngine(appState, CONFIG);
+	audioEngine.initialize();
 
-	// Create checkerboard div (behind tickers)
-	checkerboardDiv = createDiv();
-	checkerboardDiv.position(0, 0);
-	checkerboardDiv.style('width', '100%');
-	checkerboardDiv.style('height', '100%');
-	checkerboardDiv.style('position', 'fixed');
-	checkerboardDiv.style('top', '0');
-	checkerboardDiv.style('left', '0');
-	checkerboardDiv.style('z-index', '90');
-	checkerboardDiv.style('pointer-events', 'none');
-	checkerboardDiv.style('opacity', '0');
+	// Initialize visual engine
+	visualEngine = new VisualEngine(appState, CONFIG, audioEngine);
 
-	// Create precise checkerboard pattern - standard CSS approach
-	let squareSize = CHECKERBOARD_SQUARE_SIZE;
-	checkerboardDiv.style('background-color', 'transparent');
-	checkerboardDiv.style('background-image',
-		'linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%), ' +
-		'linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%)');
-	checkerboardDiv.style('background-size', (squareSize * 2) + 'px ' + (squareSize * 2) + 'px');
-	checkerboardDiv.style('background-position', '0 0, ' + squareSize + 'px ' + squareSize + 'px');
+	// Initialize media controller (coordinates audio and visual feedback)
+	mediaController = new MediaController(appState, CONFIG, audioEngine, visualEngine);
 
-	// Create main canvas for welcome button and profile (in front of tickers)
-	canvas = createCanvas(windowWidth, windowHeight);
-	canvas.position(0, 0);
-	canvas.style('z-index', '110');
+	// Initialize UI engine
+	uiEngine = new UIEngine(appState, CONFIG, mediaController);
+	uiEngine.initialize();
 
-	// Enable audio on user interaction (required for mobile browsers)
-	userStartAudio();
-
-	// Resume audio context when returning to page
+	// Setup visibility/focus handlers to stop audio and visuals when navigating away
 	document.addEventListener('visibilitychange', function() {
 		if (!document.hidden) {
-			userStartAudio();
-			// Also directly resume audio context if it's suspended
-			let audioContext = getAudioContext();
-			if (audioContext.state === 'suspended') {
-				audioContext.resume();
-			}
+			audioEngine.resumeContext();
+		} else {
+			// Fade out all feedback when page becomes hidden
+			// Use CSS transitions which work reliably even when RAF is throttled
+			mediaController.stopAll(true);
 		}
 	});
 
 	window.addEventListener('focus', function() {
-		userStartAudio();
-		// Also directly resume audio context if it's suspended
-		let audioContext = getAudioContext();
-		if (audioContext.state === 'suspended') {
-			audioContext.resume();
-		}
+		audioEngine.resumeContext();
 	});
 
-	// Additional listener for iOS - resume on any touch after backgrounding
-	if (isIOS) {
-		document.addEventListener('touchstart', function() {
-			userStartAudio();
-			let audioContext = getAudioContext();
-			if (audioContext.state === 'suspended') {
-				audioContext.resume();
-			}
-		}, { once: false, passive: true });
-	}
-
-	// Calculate frequency range for amplitude scaling and filter cutoff
-	minFrequency = Math.min(...EB_MAJOR_NOTES);
-	maxFrequency = Math.max(...EB_MAJOR_NOTES);
-	FILTER_CUTOFF_MIN = maxFrequency; // Set minimum filter cutoff to highest note frequency
+	window.addEventListener('blur', function() {
+		// Fade out all feedback when window loses focus
+		// Use CSS transitions which work reliably even when RAF is throttled
+		mediaController.stopAll(true);
+	});
 
 	// Load profile image
-	profileImg = loadImage('assets/img/fisher_diede_portrait.jpeg');
+	appState.dom.profileImg = loadImage('assets/visual/fisher_diede_portrait.jpeg');
 
 	// Load spawner images from manifest
-	loadStrings('assets/img/spawner/manifest.txt', onManifestLoaded);
+	loadStrings('assets/visual/welcome/manifest.txt', onManifestLoaded);
 
 	// Load spawner videos from manifest
-	loadStrings('assets/img/spawner/movie/manifest.txt', onVideoManifestLoaded);
+	loadStrings('assets/visual/welcome/movie/manifest.txt', onVideoManifestLoaded);
 
-	// Initialize subtle reverb for always-on ambient effect
-	subtleReverb = new p5.Reverb();
-	subtleReverb.set(SUBTLE_REVERB_DURATION, SUBTLE_REVERB_DECAY);
-	subtleReverb.drywet(SUBTLE_REVERB_DRYWET);
-
-	// Initialize reverb bus and effect for hover/profile effect
-	reverbBus = new p5.Gain();
-	reverbBus.amp(0); // Start with no send
-
-	reverb = new p5.Reverb();
-	reverb.process(reverbBus, REVERB_DURATION, REVERB_DECAY);
-	reverb.drywet(REVERB_DRYWET);
-}
-
-function onManifestLoaded(manifest) {
-	for (let i = 0; i < manifest.length; i++) {
-		let line = manifest[i].trim();
-		if (line) {
-			// Check if line contains a caption (format: filename | caption | time | place)
-			if (line.includes(' | ')) {
-				let parts = line.split(' | ');
-				let filename = parts[0].trim();
-				let caption = parts[1].trim();
-				let time = parts[2] ? parts[2].trim() : null;
-				let place = parts[3] ? parts[3].trim() : null;
-				spawnerImages.push({
-					path: 'assets/img/spawner/' + filename,
-					caption: caption,
-					time: time,
-					place: place
-				});
-			} else {
-				// No caption provided, use filename-based caption
-				spawnerImages.push({
-					path: 'assets/img/spawner/' + line,
-					caption: generateCaption(line),
-					time: null,
-					place: null
-				});
-			}
-		}
-	}
-
-	// Create randomized order
-	for (let i = 0; i < spawnerImages.length; i++) {
-		imageOrder.push(i);
-	}
-	shuffleArray(imageOrder);
-	imagesLoaded = true;
-	console.log('Spawner images loaded:', spawnerImages.length, 'images');
-}
-
-function onVideoManifestLoaded(manifest) {
-	for (let i = 0; i < manifest.length; i++) {
-		let line = manifest[i].trim();
-		if (line) {
-			// Check if line contains a caption (format: filename | caption | time | place)
-			if (line.includes(' | ')) {
-				let parts = line.split(' | ');
-				let filename = parts[0].trim();
-				let caption = parts[1].trim();
-				let time = parts[2] ? parts[2].trim() : null;
-				let place = parts[3] ? parts[3].trim() : null;
-				spawnerVideos.push({
-					path: 'assets/img/spawner/movie/' + filename,
-					caption: caption,
-					time: time,
-					place: place
-				});
-			} else {
-				// No caption provided, use filename-based caption
-				spawnerVideos.push({
-					path: 'assets/img/spawner/movie/' + line,
-					caption: generateCaption(line),
-					time: null,
-					place: null
-				});
-			}
-		}
-	}
-
-	// Create randomized order
-	for (let i = 0; i < spawnerVideos.length; i++) {
-		videoOrder.push(i);
-	}
-	shuffleArray(videoOrder);
-	videosLoaded = true;
-	console.log('Spawner videos loaded:', spawnerVideos.length, 'videos');
+	// Load biebl videos from manifest
+	loadStrings('assets/visual/biebl/manifest.txt', onBieblVideoManifestLoaded);
 }
 
 // ==================== HELPER FUNCTIONS ====================
+
+function loadManifest(manifest, assetArrayKey, basePath, options = {}) {
+	const { skipComments = false, createOrder = false, orderKey = null, loadedKey = null, preloadCallback = null } = options;
+
+	for (let i = 0; i < manifest.length; i++) {
+		let line = manifest[i].trim();
+
+		// Skip empty lines and optionally skip comments
+		if (!line || (skipComments && line.startsWith('#'))) continue;
+
+		// Check if line contains a caption (format: filename | caption | time | place)
+		if (line.includes(' | ')) {
+			let parts = line.split(' | ');
+			let filename = parts[0].trim();
+			let caption = parts[1].trim();
+			let time = parts[2] ? parts[2].trim() : null;
+			let place = parts[3] ? parts[3].trim() : null;
+			appState.assets[assetArrayKey].push({
+				path: basePath + filename,
+				caption: caption,
+				time: time,
+				place: place
+			});
+		} else {
+			// No caption provided, use filename-based caption
+			appState.assets[assetArrayKey].push({
+				path: basePath + line,
+				caption: generateCaption(line),
+				time: null,
+				place: null
+			});
+		}
+	}
+
+	// Create randomized order if requested
+	if (createOrder && orderKey) {
+		for (let i = 0; i < appState.assets[assetArrayKey].length; i++) {
+			appState.assets[orderKey].push(i);
+		}
+		shuffleArray(appState.assets[orderKey]);
+	}
+
+	// Mark as loaded if requested
+	if (loadedKey) {
+		appState.assets[loadedKey] = true;
+	}
+
+	// Call preload callback if provided
+	if (preloadCallback) {
+		preloadCallback();
+	}
+}
+
+function onManifestLoaded(manifest) {
+	loadManifest(manifest, 'spawnerImages', 'assets/visual/welcome/', {
+		createOrder: true,
+		orderKey: 'imageOrder',
+		loadedKey: 'imagesLoaded',
+		preloadCallback: () => visualEngine.preloadNextImage()
+	});
+}
+
+function onVideoManifestLoaded(manifest) {
+	loadManifest(manifest, 'spawnerVideos', 'assets/visual/welcome/movie/', {
+		createOrder: true,
+		orderKey: 'videoOrder',
+		loadedKey: 'videosLoaded',
+		preloadCallback: () => visualEngine.preloadNextVideo()
+	});
+}
+
+function onBieblVideoManifestLoaded(manifest) {
+	loadManifest(manifest, 'bieblVideos', 'assets/visual/biebl/', {
+		skipComments: true
+	});
+}
+
 function shuffleArray(array) {
 	for (let i = array.length - 1; i > 0; i--) {
 		const j = Math.floor(Math.random() * (i + 1));
@@ -319,987 +153,15 @@ function generateCaption(filename) {
 	}).join(' ');
 }
 
-function updateTickerPositions() {
-	// Move all tickers to their new positions
-	let currentBottom = TICKER_BOTTOM_MARGIN;
-
-	for (let i = 0; i < activeTickers.length; i++) {
-		let ticker = activeTickers[i];
-		ticker.element.style.bottom = currentBottom + 'px';
-		currentBottom += ticker.element.offsetHeight + TICKER_SPACING;
-	}
-}
-
-function getButtonBounds() {
-	let centerX = windowWidth / 2;
-	let centerY = windowHeight / 2;
-	return {
-		x: centerX - BUTTON_WIDTH / 2,
-		y: centerY - BUTTON_HEIGHT / 2,
-		width: BUTTON_WIDTH,
-		height: BUTTON_HEIGHT
-	};
-}
-
-function isMouseOverButton(bounds) {
-	return mouseX > bounds.x && mouseX < bounds.x + bounds.width &&
-		mouseY > bounds.y && mouseY < bounds.y + bounds.height;
-}
-
-function getAmplitudeForFrequency(freq) {
-	// Scale amplitude based on frequency to compensate for equal-loudness perception
-	// Lower frequencies need more amplitude to sound equally loud as higher frequencies
-	// Using a power curve to map frequency range to amplitude multiplier
-
-	// Normalize frequency to 0-1 range using pre-calculated min/max
-	let normalizedFreq = (freq - minFrequency) / (maxFrequency - minFrequency);
-
-	// Apply inverse power curve - low freq gets higher multiplier
-	let multiplier = 1 - (pow(normalizedFreq, 0.6) * 0.5); // Range: 1.0 (low) to 0.5 (high)
-
-	return AUDIO_AMPLITUDE * multiplier;
-}
-
-function updateAudioEffects(isHovering) {
-	audioUpdateCounter++;
-	let shouldUpdateAudio = audioUpdateCounter % AUDIO_UPDATE_THROTTLE === 0;
-
-	// Apply vibrato and reverb when hovering or when profile is showing
-	if ((isHovering && !showProfile) || showProfile) {
-		// Vibrato effect - only apply to oscillators with vibrato enabled
-		if (ENABLE_VIBRATO && shouldUpdateAudio) {
-			for (let oscData of activeOscillators) {
-				if (oscData.enableVibrato) {
-					let lfo = sin(frameCount * 0.1 * oscData.vibratoRate) * oscData.vibratoDepth;
-					oscData.osc.freq(oscData.baseFreq + lfo, VIBRATO_RAMP_TIME);
-				}
-			}
-		}
-
-		// Hold filter at maximum cutoff - only on hover state change (welcome screen only)
-		if (!wasHovering && !showProfile) {
-			for (let oscData of activeOscillators) {
-				oscData.filter.freq(FILTER_CUTOFF_MAX, FILTER_HOLD_RAMP_TIME);
-			}
-		}
-
-		// Activate reverb bus send
-		reverbBus.amp(1, REVERB_FADE_IN_TIME);
-	} else {
-		// Reset to base frequency when not hovering and not on profile
-		if (ENABLE_VIBRATO && wasHovering) {
-			for (let oscData of activeOscillators) {
-				if (oscData.enableVibrato) {
-					oscData.osc.freq(oscData.baseFreq, FILTER_HOLD_RAMP_TIME);
-				}
-			}
-		}
-
-		// Deactivate reverb bus send
-		reverbBus.amp(0, REVERB_FADE_OUT_TIME);
-	}
-
-	wasHovering = isHovering;
-}
-
 // ==================== P5.JS CORE FUNCTIONS ====================
 function draw() {
-	clear();
-
-	if (!showProfile) {
-		drawWelcomeScreen();
-	} else {
-		drawProfileScreen();
-	}
+	uiEngine.render();
 }
 
-// ==================== DRAWING FUNCTIONS ====================
-function calculateWelcomeBrightness() {
-	let centerX = windowWidth / 2;
-	let centerY = windowHeight / 2;
-
-	if (isTouchDevice) {
-		// On touch devices, always show at full brightness
-		return 255 * (1 - fadeAmount);
-	} else {
-		// On cursor devices, calculate distance from mouse to center
-		let d = dist(mouseX, mouseY, centerX, centerY);
-		let maxDist = dist(0, 0, centerX, centerY);
-		let normalizedDist = constrain(d / maxDist, 0, 1);
-
-		// Apply exponential curve (inverse so closer = brighter)
-		let exponentialFactor = pow(1 - normalizedDist, 3);
-		let brightness = exponentialFactor * 255 * 0.8; // Max 80% brightness
-
-		return brightness * (1 - fadeAmount);
-	}
-}
-
-function drawCheckerboard(opacity) {
-	// Update checkerboard div opacity (normalized from 0-255 to 0-1)
-	checkerboardDiv.style('opacity', (opacity / 255).toString());
-}
-
-function drawGradientRect(x, y, w, h, radius, centerAlpha) {
-	// Draw rounded rectangle with gradient edges that fade to transparent
-	push();
-	drawingContext.save();
-
-	// Create radial gradient from center to edges
-	let gradient = drawingContext.createRadialGradient(
-		x + w / 2, y + h / 2, 0,
-		x + w / 2, y + h / 2, Math.max(w, h) / 2
-	);
-	gradient.addColorStop(0, `rgba(0, 0, 0, ${centerAlpha})`);
-	gradient.addColorStop(0.7, `rgba(0, 0, 0, ${centerAlpha * 0.5})`);
-	gradient.addColorStop(1, `rgba(0, 0, 0, 0)`);
-
-	drawingContext.fillStyle = gradient;
-	drawingContext.beginPath();
-	drawingContext.roundRect(x, y, w, h, radius);
-	drawingContext.fill();
-
-	drawingContext.restore();
-	pop();
-}
-
-function drawWelcomeScreen() {
-	let centerX = windowWidth / 2;
-	let centerY = windowHeight / 2;
-	let brightness = calculateWelcomeBrightness();
-
-	// Get button bounds and check hover state (hover only on non-touch devices)
-	let buttonBounds = getButtonBounds();
-	let isHovering = !isTouchDevice && isMouseOverButton(buttonBounds);
-	// On touch devices, treat button press/transition as "hovering" for audio effects
-	let isTransitioning = fadeAmount > 0;
-	let shouldApplyEffects = isHovering || (isTouchDevice && isTransitioning);
-	isHoveringWelcome = shouldApplyEffects;
-
-	// Update audio effects
-	updateAudioEffects(shouldApplyEffects);
-
-	// Animate checkerboard opacity on hover or during transition
-	if (isHovering || isTransitioning) {
-		checkerboardTargetOpacity = CHECKERBOARD_OPACITY;
-	} else {
-		checkerboardTargetOpacity = 0;
-	}
-
-	// Smooth transition using lerp (60fps = ~0.0167s per frame)
-	let fadeSpeed = deltaTime / (CHECKERBOARD_FADE_TIME * 1000);
-	checkerboardOpacity = lerp(checkerboardOpacity, checkerboardTargetOpacity, fadeSpeed);
-
-	// Use hover appearance for touch devices or when hovering
-	let useHoverAppearance = isTouchDevice || isHovering;
-
-	// Calculate button opacity based on fade state
-	let buttonOpacity = 1 - fadeAmount;
-
-	// Draw checkerboard behind button (always, but with animated opacity)
-	// Checkerboard fades independently - not affected by button fade
-	drawCheckerboard(checkerboardOpacity);
-
-	// Draw button background
-	if (useHoverAppearance) {
-		fill(15, 255 * buttonOpacity);
-	} else {
-		fill(0, brightness * buttonOpacity);
-	}
-	noStroke();
-	rect(buttonBounds.x, buttonBounds.y, buttonBounds.width, buttonBounds.height, BUTTON_RADIUS);
-
-	// Draw button border
-	noFill();
-	if (useHoverAppearance) {
-		stroke(255, 255 * buttonOpacity);
-	} else {
-		stroke(Math.floor(brightness), 255 * buttonOpacity);
-	}
-	strokeWeight(2);
-	rect(buttonBounds.x, buttonBounds.y, buttonBounds.width, buttonBounds.height, BUTTON_RADIUS);
-
-	// Draw "all are" text above button
-	fill(0, 255 * buttonOpacity);
-	noStroke();
-	textFont("Courier New");
-	textSize(24);
-	textAlign(CENTER, CENTER);
-	text("all are", centerX, centerY - 50);
-
-	// Draw welcome text
-	if (useHoverAppearance) {
-		fill(255, 255 * buttonOpacity);
-	} else {
-		fill(Math.floor(brightness), 255 * buttonOpacity);
-	}
-	noStroke();
-	textFont("Courier New");
-	textSize(24);
-	textAlign(CENTER, CENTER);
-	text("welcome", centerX, centerY);
-
-	// iOS silent mode notice
-	// Fade out after first spawn
-	if (isIOS && audioNoticeOpacity > 0.01) {
-		fill(255, 127.5 * buttonOpacity * audioNoticeOpacity); // 50% opacity white * fade
-		noStroke();
-		textFont("Courier New");
-		textSize(12);
-		textAlign(CENTER, CENTER);
-		text("turn off silent mode for audio", centerX, centerY + 60);
-	}
-
-	// Fade out audio notice after first spawn
-	if (hasSpawnedMedia && audioNoticeOpacity > 0) {
-		audioNoticeOpacity = max(audioNoticeOpacity - (deltaTime / 1000), 0); // Fade over 1 second
-	}
-
-	// Animate fade transition
-	if (fadeAmount > 0) {
-		let fadeIncrement = deltaTime / (BUTTON_FADE_DURATION * 1000);
-		fadeAmount += fadeIncrement;
-		if (fadeAmount >= 1) {
-			showProfile = true;
-			fadeAmount = 0;
-		}
-	}
-}
-
-function drawProfileScreen() {
-	isHoveringWelcome = false;
-	let fadeIncrement = deltaTime / (PAGE_FADE_DURATION * 1000);
-	fadeAmount = min(fadeAmount + fadeIncrement, 1);
-	let alpha = 255 * fadeAmount;
-
-	// Continue updating audio effects for active oscillators
-	updateAudioEffects(false);
-
-	// Draw checkerboard background at full opacity
-	drawCheckerboard(CHECKERBOARD_OPACITY);
-
-	let centerX = windowWidth / 2;
-	let centerY = windowHeight / 2;
-
-	// Draw gradient background behind name
-	let nameW = 280;
-	let nameH = 50;
-	let nameX = centerX - nameW/2;
-	let nameY = centerY - 145;
-	drawGradientRect(nameX, nameY, nameW, nameH, 15, fadeAmount * 0.33);
-
-	fill(255, alpha);
-	textFont("Courier New");
-
-	// Name
-	textSize(32);
-	textAlign(CENTER);
-	text("Fisher Diede", centerX, centerY - 120);
-
-	// Profile image with circular mask
-	let circleDiameter = isTouchDevice ? 80 : 100; // Smaller on mobile
-	push();
-	drawingContext.save();
-	drawingContext.beginPath();
-	drawingContext.arc(centerX, centerY - 30, circleDiameter / 2, 0, Math.PI * 2);
-	drawingContext.closePath();
-	drawingContext.clip();
-
-	// Draw image maintaining aspect ratio, cropped to fill circle
-	let imgAspect = profileImg.width / profileImg.height;
-	let imgW, imgH;
-
-	if (imgAspect > 1) {
-		imgH = circleDiameter;
-		imgW = circleDiameter * imgAspect;
-	} else {
-		imgW = circleDiameter;
-		imgH = circleDiameter / imgAspect;
-	}
-
-	tint(255, alpha);
-	imageMode(CENTER);
-	image(profileImg, centerX, centerY - 30, imgW, imgH);
-	noTint();
-	drawingContext.restore();
-	pop();
-
-	// Circle borders - black outer, white inner
-	noFill();
-	// Black outer border (subtle, matches background opacity)
-	stroke(0, alpha * 0.33);
-	strokeWeight(2);
-	circle(centerX, centerY - 30, circleDiameter + 4); // Use dynamic diameter for border
-	// White inner border
-	stroke(255, alpha);
-	strokeWeight(2);
-	circle(centerX, centerY - 30, circleDiameter);
-
-	// Draw gradient background behind bio and email
-	let bioW = 280;
-	let bioH = 70;
-	let bioX = centerX - bioW/2;
-	let bioY = centerY + 40;
-	drawGradientRect(bioX, bioY, bioW, bioH, 15, fadeAmount * 0.33);
-
-	// Bio
-	strokeWeight(1);
-	fill(255, alpha);
-	textSize(16);
-	textAlign(CENTER);
-	text("Creative Technologist", centerX, centerY + 60);
-
-	// Contact info
-	textSize(14);
-	text("fisherdiede@icloud.com", centerX, centerY + 100);
-}
-
-// ==================== EVENT HANDLERS ====================
 function windowResized() {
-  	resizeCanvas(windowWidth, windowHeight);
+	uiEngine.handleResize(windowWidth, windowHeight);
 }
 
 function mousePressed() {
-	// Resume audio context on user interaction (in case it was suspended)
-	userStartAudio();
-
-	if (!showProfile && fadeAmount === 0) {
-		let buttonBounds = getButtonBounds();
-		if (isMouseOverButton(buttonBounds)) {
-			fadeAmount = 0.01;
-			return false;
-		}
-	}
-
-	spawnMedia(mouseX, mouseY);
-}
-
-// ==================== IMAGE SPAWNING & AUDIO ====================
-function spawnMedia(x, y) {
-	// Block spawning if a video is currently playing
-	if (videoIsPlaying) {
-		console.log('Spawn blocked - video is playing');
-		return;
-	}
-
-	// Mark that media has been spawned (for audio notice fade)
-	hasSpawnedMedia = true;
-
-	// Check if both images and videos are loaded
-	let canSpawnImage = imagesLoaded && spawnerImages.length > 0;
-	let canSpawnVideo = videosLoaded && spawnerVideos.length > 0;
-
-	if (!canSpawnImage && !canSpawnVideo) {
-		console.log('Spawn blocked - no media loaded');
-		return;
-	}
-
-	// Video can only spawn if at least MIN_IMAGES_BEFORE_VIDEO images have been spawned since last video
-	let shouldConsiderVideo = canSpawnVideo && imagesSinceLastVideo >= MIN_IMAGES_BEFORE_VIDEO;
-
-	if (shouldConsiderVideo) {
-		// VIDEO_SPAWN_PROBABILITY chance to spawn video
-		if (random() < VIDEO_SPAWN_PROBABILITY) {
-			spawnVideo(x, y);
-			imagesSinceLastVideo = 0; // Reset counter after spawning video
-		} else {
-			spawnImage(x, y);
-			imagesSinceLastVideo++;
-		}
-	} else {
-		// Always spawn image if video conditions not met
-		spawnImage(x, y);
-		imagesSinceLastVideo++;
-	}
-}
-
-function spawnImage(x, y) {
-	if (!imagesLoaded || spawnerImages.length === 0) {
-		console.log('Spawn blocked - imagesLoaded:', imagesLoaded, 'spawnerImages.length:', spawnerImages.length);
-		return;
-	}
-
-	// Get next image in shuffled order
-	let imgIndex = imageOrder[currentImageIndex];
-	currentImageIndex = (currentImageIndex + 1) % imageOrder.length;
-
-	// Select random note from Eb major scale (avoid repeating the last note)
-	let frequency;
-	if (EB_MAJOR_NOTES.length > 1) {
-		do {
-			frequency = random(EB_MAJOR_NOTES);
-		} while (frequency === lastPlayedNote);
-	} else {
-		frequency = random(EB_MAJOR_NOTES);
-	}
-	lastPlayedNote = frequency;
-
-	// Create oscillator with lowpass filter
-	// Use sine wave if profile is showing, sawtooth otherwise
-	let oscType = showProfile ? 'sine' : 'sawtooth';
-	let osc = new p5.Oscillator(oscType);
-	let baseFrequency = frequency; // Store base frequency
-	osc.freq(baseFrequency);
-	osc.amp(0);
-
-	// Create lowpass filter
-	let filter = new p5.LowPass();
-	osc.disconnect();
-	osc.connect(filter);
-	filter.freq(FILTER_CUTOFF_MAX);
-
-	// Create stereo panner for spatial audio
-	let audioContext = getAudioContext();
-	let panner = audioContext.createStereoPanner();
-
-	// Connect filter to outputs through panner
-	filter.disconnect();
-	filter.connect(panner);
-
-	// Route through subtle reverb (always-on, outputs to master with dry/wet mix)
-	panner.connect(subtleReverb.input);
-	// Also connect to reverb bus for intense hover/profile effect
-	panner.connect(reverbBus);
-
-	osc.start();
-
-	// Calculate frequency-based amplitude for perceptual balance
-	let targetAmplitude = getAmplitudeForFrequency(baseFrequency);
-
-	// Fade in
-	osc.amp(targetAmplitude, AUDIO_FADE_IN_TIME);
-
-	// Track oscillator and filter for effects with randomized vibrato parameters
-	let oscData = {
-		osc: osc,
-		baseFreq: baseFrequency,
-		filter: filter,
-		panner: panner,
-		amplitude: targetAmplitude, // Store frequency-adjusted amplitude
-		vibratoRate: random(VIBRATO_RATE_MIN, VIBRATO_RATE_MAX),
-		vibratoDepth: random(VIBRATO_DEPTH_MIN, VIBRATO_DEPTH_MAX),
-		enableVibrato: !showProfile // Only enable vibrato for sawtooth oscillators (welcome screen)
-	};
-	activeOscillators.push(oscData);
-
-	// Create img element
-	let img = document.createElement('img');
-	img.src = spawnerImages[imgIndex].path;
-	img.style.position = 'absolute';
-	img.style.left = x + 'px';
-	img.style.top = y + 'px';
-	img.style.maxWidth = random(SIZE_MIN, SIZE_MAX) + 'px';
-	img.style.maxHeight = random(SIZE_MIN, SIZE_MAX) + 'px';
-	img.style.objectFit = 'contain';
-	img.style.pointerEvents = 'none';
-	img.style.zIndex = '10';
-	img.style.transform = 'translate(-50%, -50%)';
-	img.style.transition = 'opacity 1s ease-out';
-	// Apply transparency vignette via mask - square vignette on all edges
-	img.style.webkitMaskImage = 'linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%), linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)';
-	img.style.maskImage = 'linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%), linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)';
-	img.style.webkitMaskComposite = 'source-in';
-	img.style.maskComposite = 'intersect';
-	img.style.webkitMaskSize = '100% 100%';
-	img.style.maskSize = '100% 100%';
-	img.style.webkitMaskRepeat = 'no-repeat';
-	img.style.maskRepeat = 'no-repeat';
-	img.style.webkitMaskPosition = 'center';
-	img.style.maskPosition = 'center';
-
-	document.body.appendChild(img);
-
-	// Create ticker element
-	let ticker = document.createElement('div');
-	let imageData = spawnerImages[imgIndex];
-
-	// Build ticker content
-	let tickerContent = imageData.caption;
-	if (imageData.time || imageData.place) {
-		tickerContent += '\n';
-		if (imageData.time) tickerContent += imageData.time;
-		if (imageData.time && imageData.place) tickerContent += ' | ';
-		if (imageData.place) tickerContent += imageData.place;
-	}
-
-	ticker.textContent = tickerContent;
-	ticker.style.position = 'fixed';
-	ticker.style.left = TICKER_LEFT_MARGIN + 'px';
-	ticker.style.bottom = TICKER_BOTTOM_MARGIN + 'px';
-	ticker.style.padding = TICKER_PADDING + 'px';
-	ticker.style.background = 'radial-gradient(ellipse at center, rgba(0, 0, 0, 0.33) 0%, rgba(0, 0, 0, 0.165) 70%, rgba(0, 0, 0, 0) 100%)';
-	ticker.style.color = 'white';
-	ticker.style.fontFamily = 'Courier New';
-	ticker.style.fontSize = TICKER_FONT_SIZE + 'px';
-	ticker.style.border = 'none';
-	ticker.style.borderRadius = '5px';
-	ticker.style.zIndex = '100';
-	ticker.style.transition = 'bottom 0.3s ease-out';
-	ticker.style.pointerEvents = 'none';
-	ticker.style.wordWrap = 'break-word';
-	ticker.style.whiteSpace = 'pre-line';
-	ticker.style.width = 'fit-content';
-	ticker.style.maxWidth = 'calc(100vw - ' + (TICKER_LEFT_MARGIN + TICKER_RIGHT_MARGIN) + 'px)';
-
-	document.body.appendChild(ticker);
-
-	// Add to activeTickers array at the beginning (so it appears at bottom)
-	let tickerData = {
-		element: ticker,
-		startTime: Date.now()
-	};
-	activeTickers.unshift(tickerData);
-
-	// Update positions of all tickers
-	updateTickerPositions();
-
-	// Random movement
-	let angle = random(TWO_PI);
-	let speed = random(SPEED_MIN, SPEED_MAX);
-	let vx = cos(angle) * speed;
-	let vy = sin(angle) * speed;
-
-	// Animate movement
-	let startTime = Date.now();
-	let animationFrame;
-	let frameCounter = 0; // Throttle filter updates
-
-	function animate() {
-		let elapsed = (Date.now() - startTime) / 1000;
-		frameCounter++;
-
-		if (elapsed < ANIMATION_DURATION) {
-			// Calculate mouse proximity for filter modulation
-			// Only respond to cursor on welcome screen, not on profile screen
-			if (!isTouchDevice && !isHoveringWelcome && !showProfile) {
-				let centerX = windowWidth / 2;
-				let centerY = windowHeight / 2;
-				let d = dist(mouseX, mouseY, centerX, centerY);
-				let maxDist = dist(0, 0, centerX, centerY);
-				let normalizedDist = constrain(d / maxDist, 0, 1);
-
-				// Apply exponential curve (inverse so closer = higher cutoff)
-				let exponentialFactor = pow(1 - normalizedDist, 3);
-
-				// Map cutoff from min (edges) to max (center)
-				let cutoffFreq = FILTER_CUTOFF_MIN + (exponentialFactor * (FILTER_CUTOFF_MAX - FILTER_CUTOFF_MIN));
-				filter.freq(cutoffFreq, FILTER_RAMP_TIME);
-			}
-
-			// Move
-			let newX = x + vx * elapsed * 60;
-			let newY = y + vy * elapsed * 60;
-			img.style.left = newX + 'px';
-			img.style.top = newY + 'px';
-
-			// Update stereo panning based on position
-			// Map x position to pan value: -1 (left) to 1 (right)
-			let panValue = (newX / windowWidth) * 2 - 1;
-			panValue = constrain(panValue, -1, 1);
-			panner.pan.value = panValue;
-
-			// Expand gradually
-			let scale = 1 + (elapsed / ANIMATION_DURATION) * SCALE_GROWTH;
-			img.style.transform = `translate(-50%, -50%) scale(${scale})`;
-
-			// Fade out visuals and audio
-			if (elapsed > FADE_START_TIME) {
-				let fadeProgress = (elapsed - FADE_START_TIME) / (ANIMATION_DURATION - FADE_START_TIME);
-				// Apply ease-in-ease-out curve (smoothstep)
-				let easedProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
-				let opacity = 1 - easedProgress;
-				img.style.opacity = opacity;
-
-				// Update ticker opacity
-				if (ticker) {
-					ticker.style.opacity = opacity;
-				}
-
-				// Sync audio fade with visual fade (throttled for performance)
-				// Apply exponential curve for more natural-sounding audio fade
-				if (frameCounter % AMPLITUDE_FADE_THROTTLE === 0) {
-					let audioOpacity = pow(opacity, 2); // Exponential fade curve
-					let audioAmp = oscData.amplitude * audioOpacity;
-					osc.amp(audioAmp, AUDIO_FADE_OUT_TIME);
-				}
-			}
-
-			animationFrame = requestAnimationFrame(animate);
-		} else {
-			// Remove element and stop audio
-			document.body.removeChild(img);
-			osc.amp(0, AUDIO_FADE_OUT_TIME);
-			osc.stop(0.2);
-
-			// Dispose of audio nodes to free resources
-			filter.dispose();
-			panner.disconnect();
-
-			// Remove from active oscillators array
-			let index = activeOscillators.findIndex(item => item.osc === osc);
-			if (index !== -1) {
-				activeOscillators.splice(index, 1);
-			}
-
-			// Remove ticker if it exists
-			if (ticker) {
-				document.body.removeChild(ticker);
-				let tickerIndex = activeTickers.findIndex(item => item.element === ticker);
-				if (tickerIndex !== -1) {
-					activeTickers.splice(tickerIndex, 1);
-				}
-			}
-
-			cancelAnimationFrame(animationFrame);
-		}
-	}
-
-	animate();
-}
-
-function spawnVideo(x, y) {
-	if (!videosLoaded || spawnerVideos.length === 0) {
-		console.log('Spawn blocked - videosLoaded:', videosLoaded, 'spawnerVideos.length:', spawnerVideos.length);
-		return;
-	}
-
-	// Set flag to block other spawns while video is playing
-	videoIsPlaying = true;
-
-	// Get next video in shuffled order
-	let videoIndex = videoOrder[currentVideoIndex];
-	currentVideoIndex = (currentVideoIndex + 1) % videoOrder.length;
-
-	// Select random note from Eb major scale (avoid repeating the last note)
-	let frequency;
-	if (EB_MAJOR_NOTES.length > 1) {
-		do {
-			frequency = random(EB_MAJOR_NOTES);
-		} while (frequency === lastPlayedNote);
-	} else {
-		frequency = random(EB_MAJOR_NOTES);
-	}
-	lastPlayedNote = frequency;
-
-	// Create oscillator with lowpass filter
-	// Use sine wave if profile is showing, sawtooth otherwise
-	let oscType = showProfile ? 'sine' : 'sawtooth';
-	let osc = new p5.Oscillator(oscType);
-	let baseFrequency = frequency; // Store base frequency
-	osc.freq(baseFrequency);
-	osc.amp(0);
-
-	// Create lowpass filter
-	let filter = new p5.LowPass();
-	osc.disconnect();
-	osc.connect(filter);
-	filter.freq(FILTER_CUTOFF_MAX);
-
-	// Create stereo panner for spatial audio
-	let audioContext = getAudioContext();
-	let panner = audioContext.createStereoPanner();
-
-	// Connect filter to outputs through panner
-	filter.disconnect();
-	filter.connect(panner);
-
-	// Route through subtle reverb (always-on, outputs to master with dry/wet mix)
-	panner.connect(subtleReverb.input);
-	// Also connect to reverb bus for intense hover/profile effect
-	panner.connect(reverbBus);
-
-	osc.start();
-
-	// Calculate frequency-based amplitude for perceptual balance
-	let targetAmplitude = getAmplitudeForFrequency(baseFrequency);
-
-	// Fade in
-	osc.amp(targetAmplitude, AUDIO_FADE_IN_TIME);
-
-	// Track oscillator and filter for effects with randomized vibrato parameters
-	let oscData = {
-		osc: osc,
-		baseFreq: baseFrequency,
-		filter: filter,
-		panner: panner,
-		amplitude: targetAmplitude, // Store frequency-adjusted amplitude
-		vibratoRate: random(VIBRATO_RATE_MIN, VIBRATO_RATE_MAX),
-		vibratoDepth: random(VIBRATO_DEPTH_MIN, VIBRATO_DEPTH_MAX),
-		enableVibrato: !showProfile // Only enable vibrato for sawtooth oscillators (welcome screen)
-	};
-	activeOscillators.push(oscData);
-
-	// Create video element
-	let video = document.createElement('video');
-	video.src = spawnerVideos[videoIndex].path;
-	video.style.position = 'absolute';
-	video.style.left = x + 'px';
-	video.style.top = y + 'px';
-	video.style.maxWidth = SIZE_MAX + 'px';
-	video.style.maxHeight = SIZE_MAX + 'px';
-	video.style.objectFit = 'contain';
-	video.style.pointerEvents = 'none';
-	video.style.zIndex = '10';
-	video.style.transform = 'translate(-50%, -50%)';
-	video.style.transition = 'opacity 1s ease-out';
-	// Apply transparency vignette via mask - square vignette on all edges
-	video.style.webkitMaskImage = 'linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%), linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)';
-	video.style.maskImage = 'linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%), linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)';
-	video.style.webkitMaskComposite = 'source-in';
-	video.style.maskComposite = 'intersect';
-	video.style.webkitMaskSize = '100% 100%';
-	video.style.maskSize = '100% 100%';
-	video.style.webkitMaskRepeat = 'no-repeat';
-	video.style.maskRepeat = 'no-repeat';
-	video.style.webkitMaskPosition = 'center';
-	video.style.maskPosition = 'center';
-	video.muted = true; // Mute video element, we'll play audio separately
-	video.loop = false;
-	video.playsInline = true; // For iOS compatibility
-	video.preload = 'auto'; // Preload video for smoother playback
-
-	// Adjust playback rate to stretch video to fill animation duration
-	video.addEventListener('loadedmetadata', function() {
-		video.playbackRate = video.duration / ANIMATION_DURATION;
-	});
-
-	document.body.appendChild(video);
-
-	// Explicitly play video for mobile compatibility
-	video.play().catch(err => {
-		console.log('Video play error:', err);
-	});
-
-	// Create ticker element
-	let ticker = document.createElement('div');
-	let videoData = spawnerVideos[videoIndex];
-
-	// Build ticker content
-	let tickerContent = videoData.caption;
-	if (videoData.time || videoData.place) {
-		tickerContent += '\n';
-		if (videoData.time) tickerContent += videoData.time;
-		if (videoData.time && videoData.place) tickerContent += ' | ';
-		if (videoData.place) tickerContent += videoData.place;
-	}
-
-	ticker.textContent = tickerContent;
-	ticker.style.position = 'fixed';
-	ticker.style.left = TICKER_LEFT_MARGIN + 'px';
-	ticker.style.bottom = TICKER_BOTTOM_MARGIN + 'px';
-	ticker.style.padding = TICKER_PADDING + 'px';
-	ticker.style.background = 'radial-gradient(ellipse at center, rgba(0, 0, 0, 0.33) 0%, rgba(0, 0, 0, 0.165) 70%, rgba(0, 0, 0, 0) 100%)';
-	ticker.style.color = 'white';
-	ticker.style.fontFamily = 'Courier New';
-	ticker.style.fontSize = TICKER_FONT_SIZE + 'px';
-	ticker.style.border = 'none';
-	ticker.style.borderRadius = '5px';
-	ticker.style.zIndex = '100';
-	ticker.style.transition = 'bottom 0.3s ease-out';
-	ticker.style.pointerEvents = 'none';
-	ticker.style.wordWrap = 'break-word';
-	ticker.style.whiteSpace = 'pre-line';
-	ticker.style.width = 'fit-content';
-	ticker.style.maxWidth = 'calc(100vw - ' + (TICKER_LEFT_MARGIN + TICKER_RIGHT_MARGIN) + 'px)';
-
-	document.body.appendChild(ticker);
-
-	// Add to activeTickers array at the beginning (so it appears at bottom)
-	let tickerData = {
-		element: ticker,
-		startTime: Date.now()
-	};
-	activeTickers.unshift(tickerData);
-
-	// Update positions of all tickers
-	updateTickerPositions();
-
-	// Load and play audio separately at normal speed to avoid choppy playback
-	let audioSource = null;
-	let audioBuffer = null;
-
-	// Initialize storage object for audio nodes
-	let videoAudioNodes = {};
-
-	// Fetch and decode audio from video file
-	fetch(spawnerVideos[videoIndex].path)
-		.then(response => response.arrayBuffer())
-		.then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
-		.then(buffer => {
-			audioBuffer = buffer;
-
-			// Create buffer source
-			audioSource = audioContext.createBufferSource();
-			audioSource.buffer = audioBuffer;
-
-			// Create lowpass filter
-			let videoFilter = audioContext.createBiquadFilter();
-			videoFilter.type = 'lowpass';
-			videoFilter.frequency.value = VIDEO_FILTER_FREQ;
-
-			// Create reverb using p5.Reverb
-			let videoReverb = new p5.Reverb();
-			videoReverb.set(VIDEO_REVERB_DURATION, VIDEO_REVERB_DECAY);
-			videoReverb.drywet(0.8); // 80% wet/dry mix for intense reverb
-
-			// Create gain node for volume control (for fading)
-			let videoGain = audioContext.createGain();
-			videoGain.gain.value = 1.0;
-
-			// Create stereo panner for spatial audio
-			let videoPanner = audioContext.createStereoPanner();
-
-			// Connect the chain: audioSource -> filter -> gain -> panner -> reverb -> output
-			audioSource.connect(videoFilter);
-			videoFilter.connect(videoGain);
-			videoGain.connect(videoPanner);
-			videoPanner.connect(videoReverb.input);
-
-			// Store references for cleanup
-			videoAudioNodes.source = audioSource;
-			videoAudioNodes.filter = videoFilter;
-			videoAudioNodes.reverb = videoReverb;
-			videoAudioNodes.gain = videoGain;
-			videoAudioNodes.panner = videoPanner;
-
-			// Start audio playback
-			audioSource.start();
-		})
-		.catch(err => {
-			console.log('Error loading video audio:', err);
-		});
-
-	// Random movement
-	let angle = random(TWO_PI);
-	let speed = random(SPEED_MIN, SPEED_MAX);
-	let vx = cos(angle) * speed;
-	let vy = sin(angle) * speed;
-
-	// Animate movement
-	let startTime = Date.now();
-	let animationFrame;
-	let frameCounter = 0; // Throttle filter updates
-
-	function animate() {
-		let elapsed = (Date.now() - startTime) / 1000;
-		frameCounter++;
-
-		if (elapsed < ANIMATION_DURATION) {
-			// Calculate mouse proximity for filter modulation
-			// Only respond to cursor on welcome screen, not on profile screen
-			if (!isTouchDevice && !isHoveringWelcome && !showProfile) {
-				let centerX = windowWidth / 2;
-				let centerY = windowHeight / 2;
-				let d = dist(mouseX, mouseY, centerX, centerY);
-				let maxDist = dist(0, 0, centerX, centerY);
-				let normalizedDist = constrain(d / maxDist, 0, 1);
-
-				// Apply exponential curve (inverse so closer = higher cutoff)
-				let exponentialFactor = pow(1 - normalizedDist, 3);
-
-				// Map cutoff from min (edges) to max (center)
-				let cutoffFreq = FILTER_CUTOFF_MIN + (exponentialFactor * (FILTER_CUTOFF_MAX - FILTER_CUTOFF_MIN));
-				filter.freq(cutoffFreq, FILTER_RAMP_TIME);
-			}
-
-			// Move
-			let newX = x + vx * elapsed * 60;
-			let newY = y + vy * elapsed * 60;
-			video.style.left = newX + 'px';
-			video.style.top = newY + 'px';
-
-			// Update stereo panning based on position
-			// Map x position to pan value: -1 (left) to 1 (right)
-			if (videoAudioNodes.panner) {
-				let panValue = (newX / windowWidth) * 2 - 1;
-				panValue = constrain(panValue, -1, 1);
-				videoAudioNodes.panner.pan.value = panValue;
-			}
-
-			// Expand gradually
-			let scale = 1 + (elapsed / ANIMATION_DURATION) * SCALE_GROWTH;
-			video.style.transform = `translate(-50%, -50%) scale(${scale})`;
-
-			// Fade out visuals and audio
-			if (elapsed > FADE_START_TIME) {
-				let fadeProgress = (elapsed - FADE_START_TIME) / (ANIMATION_DURATION - FADE_START_TIME);
-				// Apply ease-in-ease-out curve (smoothstep)
-				let easedProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
-				let opacity = 1 - easedProgress;
-				video.style.opacity = opacity;
-
-				// Update ticker opacity
-				if (ticker) {
-					ticker.style.opacity = opacity;
-				}
-
-				// Sync audio fade with visual fade (throttled for performance)
-				// Apply exponential curve for more natural-sounding audio fade
-				if (frameCounter % AMPLITUDE_FADE_THROTTLE === 0) {
-					let audioOpacity = pow(opacity, 2); // Exponential fade curve
-					let audioAmp = oscData.amplitude * audioOpacity;
-					osc.amp(audioAmp, AUDIO_FADE_OUT_TIME);
-
-					// Fade video audio only in the last VIDEO_AUDIO_FADE_DURATION seconds
-					if (elapsed > ANIMATION_DURATION - VIDEO_AUDIO_FADE_DURATION) {
-						let videoAudioOpacity = (ANIMATION_DURATION - elapsed) / VIDEO_AUDIO_FADE_DURATION;
-						videoAudioOpacity = pow(videoAudioOpacity, 2); // Exponential fade curve
-						if (videoAudioNodes.gain) {
-							videoAudioNodes.gain.gain.value = videoAudioOpacity;
-						}
-					}
-				}
-			}
-
-			animationFrame = requestAnimationFrame(animate);
-		} else {
-			// Remove element and stop audio
-			document.body.removeChild(video);
-			osc.amp(0, AUDIO_FADE_OUT_TIME);
-			osc.stop(0.2);
-
-			// Dispose of filter to free resources
-			filter.dispose();
-
-			// Clean up video audio nodes
-			if (videoAudioNodes.source) {
-				videoAudioNodes.source.stop();
-				videoAudioNodes.source.disconnect();
-			}
-			if (videoAudioNodes.filter) {
-				videoAudioNodes.filter.disconnect();
-			}
-			if (videoAudioNodes.gain) {
-				videoAudioNodes.gain.disconnect();
-			}
-			if (videoAudioNodes.panner) {
-				videoAudioNodes.panner.disconnect();
-			}
-			if (videoAudioNodes.reverb) {
-				videoAudioNodes.reverb.dispose();
-			}
-
-			// Remove from active oscillators array
-			let index = activeOscillators.findIndex(item => item.osc === osc);
-			if (index !== -1) {
-				activeOscillators.splice(index, 1);
-			}
-
-			// Remove ticker if it exists
-			if (ticker) {
-				document.body.removeChild(ticker);
-				let tickerIndex = activeTickers.findIndex(item => item.element === ticker);
-				if (tickerIndex !== -1) {
-					activeTickers.splice(tickerIndex, 1);
-				}
-			}
-
-			// Reset flag to allow spawning again
-			videoIsPlaying = false;
-
-			cancelAnimationFrame(animationFrame);
-		}
-	}
-
-	animate();
+	uiEngine.handleClick(mouseX, mouseY);
 }
