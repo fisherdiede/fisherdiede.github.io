@@ -15,6 +15,9 @@ var videoIsPlaying = false;
 var imagesLoaded = false;
 var videosLoaded = false;
 var isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+var hasSpawnedMedia = false;
+var audioNoticeOpacity = 1.0;
 var wasHovering = false;
 var isHoveringWelcome = false;
 var checkerboardOpacity = 0;
@@ -166,12 +169,33 @@ function setup() {
 	document.addEventListener('visibilitychange', function() {
 		if (!document.hidden) {
 			userStartAudio();
+			// Also directly resume audio context if it's suspended
+			let audioContext = getAudioContext();
+			if (audioContext.state === 'suspended') {
+				audioContext.resume();
+			}
 		}
 	});
 
 	window.addEventListener('focus', function() {
 		userStartAudio();
+		// Also directly resume audio context if it's suspended
+		let audioContext = getAudioContext();
+		if (audioContext.state === 'suspended') {
+			audioContext.resume();
+		}
 	});
+
+	// Additional listener for iOS - resume on any touch after backgrounding
+	if (isIOS) {
+		document.addEventListener('touchstart', function() {
+			userStartAudio();
+			let audioContext = getAudioContext();
+			if (audioContext.state === 'suspended') {
+				audioContext.resume();
+			}
+		}, { once: false, passive: true });
+	}
 
 	// Calculate frequency range for amplitude scaling and filter cutoff
 	minFrequency = Math.min(...EB_MAJOR_NOTES);
@@ -515,6 +539,22 @@ function drawWelcomeScreen() {
 	textAlign(CENTER, CENTER);
 	text("welcome", centerX, centerY);
 
+	// iOS silent mode notice
+	// Fade out after first spawn
+	if (isIOS && audioNoticeOpacity > 0.01) {
+		fill(255, 127.5 * buttonOpacity * audioNoticeOpacity); // 50% opacity white * fade
+		noStroke();
+		textFont("Courier New");
+		textSize(12);
+		textAlign(CENTER, CENTER);
+		text("turn off silent mode for audio", centerX, centerY + 60);
+	}
+
+	// Fade out audio notice after first spawn
+	if (hasSpawnedMedia && audioNoticeOpacity > 0) {
+		audioNoticeOpacity = max(audioNoticeOpacity - (deltaTime / 1000), 0); // Fade over 1 second
+	}
+
 	// Animate fade transition
 	if (fadeAmount > 0) {
 		let fadeIncrement = deltaTime / (BUTTON_FADE_DURATION * 1000);
@@ -641,6 +681,9 @@ function spawnMedia(x, y) {
 		console.log('Spawn blocked - video is playing');
 		return;
 	}
+
+	// Mark that media has been spawned (for audio notice fade)
+	hasSpawnedMedia = true;
 
 	// Check if both images and videos are loaded
 	let canSpawnImage = imagesLoaded && spawnerImages.length > 0;
