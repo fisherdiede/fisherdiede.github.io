@@ -165,3 +165,9 @@ function windowResized() {
 function mousePressed() {
 	uiEngine.handleClick(mouseX, mouseY);
 }
+
+function touchStarted() {
+	// Prevent both touch and mouse events from firing on mobile
+	uiEngine.handleClick(mouseX, mouseY);
+	return false; // Prevent default and stop mousePressed from also firing
+}
