@@ -62,6 +62,7 @@ window.appState = {
     currentVideoIndex: 0,
     preloadedImage: null,
     preloadedVideo: null,
+    preloadedSpawnerVideo: null,  // For preloading spawner mode videos
     imagesLoaded: false,
     videosLoaded: false
   },

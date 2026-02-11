@@ -136,7 +136,7 @@ class MediaController {
 
 		if (!alreadyInBieblMode) {
 			// First time activating - enter spawner mode
-			this.enterSpawnerMode({
+			const config = {
 				name: 'biebl',
 				videoSet: this.state.assets.bieblVideos,
 				playbackMode: 'sequential',
@@ -151,7 +151,9 @@ class MediaController {
 				movement: 'subtle',
 				scaleGrowth: 1.01,
 				currentIndex: 0
-			});
+			};
+
+			this.enterSpawnerMode(config);
 
 			// Auto-spawn first video centered
 			this.spawnMedia(windowWidth / 2, windowHeight / 2);
