@@ -2,13 +2,30 @@
 <html lang="">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>fisher's website</title>
   <style>
     body {
       padding: 0;
       margin: 0;
       background-color: black;
+      /* Prevent pull-to-refresh and overscroll */
+      overscroll-behavior: none;
+      -webkit-overflow-scrolling: touch;
+      /* Fix for mobile address bar affecting 100vh */
+      height: 100vh;
+      height: -webkit-fill-available;
+    }
+
+    html {
+      /* Fix for mobile address bar affecting 100vh */
+      height: -webkit-fill-available;
+    }
+
+    /* Prevent text selection on UI elements */
+    * {
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
     }
   </style>
   <script src="p5/p5.js"></script>

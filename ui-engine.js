@@ -79,6 +79,8 @@ class UIEngine {
 		this.state.dom.canvas = createCanvas(windowWidth, windowHeight);
 		this.state.dom.canvas.position(0, 0);
 		this.state.dom.canvas.style('z-index', '110');
+		this.state.dom.canvas.style('transform', 'translateZ(0)');  // Force hardware acceleration
+		this.state.dom.canvas.style('will-change', 'transform');    // Optimize for transforms
 	}
 
 	_createCheckerboard() {
@@ -118,6 +120,9 @@ class UIEngine {
 		this.state.dom.toolbarDiv.style('justify-content', 'center');
 		this.state.dom.toolbarDiv.style('align-items', 'center');
 		this.state.dom.toolbarDiv.style('gap', '40px');
+		this.state.dom.toolbarDiv.style('background', 'linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 100%)');
+		this.state.dom.toolbarDiv.style('backdrop-filter', 'blur(10px)');
+		this.state.dom.toolbarDiv.style('-webkit-backdrop-filter', 'blur(10px)');
 		this.state.dom.toolbarDiv.style('opacity', '0');
 		this.state.dom.toolbarDiv.style('pointer-events', 'none');
 		this.state.dom.toolbarDiv.style('transition', 'opacity 0.5s ease');
@@ -129,13 +134,28 @@ class UIEngine {
 		profileTab.style('color', 'white');
 		profileTab.style('cursor', 'pointer');
 		profileTab.style('padding', '10px 20px');
+		profileTab.style('min-width', '44px'); // iOS minimum touch target
+		profileTab.style('min-height', '44px'); // iOS minimum touch target
+		profileTab.style('display', 'flex');
+		profileTab.style('align-items', 'center');
+		profileTab.style('justify-content', 'center');
 		profileTab.style('border-bottom', '2px solid white');
 		profileTab.style('transition', 'transform 0.15s ease-out');
+		profileTab.style('-webkit-tap-highlight-color', 'transparent');
+		profileTab.style('user-select', 'none');
+		profileTab.style('-webkit-user-select', 'none');
 		profileTab.id('profile-tab');
+
+		// Add touch and mouse support
 		profileTab.mousePressed(() => {
 			this._handleProfileTab();
-			return false; // Prevent global mousePressed
+			return false;
 		});
+		profileTab.touchStarted(() => {
+			this._handleProfileTab();
+			return false;
+		});
+
 		this.state.dom.toolbarDiv.child(profileTab);
 
 		// Create Portfolio tab
@@ -145,12 +165,27 @@ class UIEngine {
 		portfolioTab.style('color', 'rgba(255, 255, 255, 0.5)');
 		portfolioTab.style('cursor', 'pointer');
 		portfolioTab.style('padding', '10px 20px');
+		portfolioTab.style('min-width', '44px'); // iOS minimum touch target
+		portfolioTab.style('min-height', '44px'); // iOS minimum touch target
+		portfolioTab.style('display', 'flex');
+		portfolioTab.style('align-items', 'center');
+		portfolioTab.style('justify-content', 'center');
 		portfolioTab.style('transition', 'transform 0.15s ease-out');
+		portfolioTab.style('-webkit-tap-highlight-color', 'transparent');
+		portfolioTab.style('user-select', 'none');
+		portfolioTab.style('-webkit-user-select', 'none');
 		portfolioTab.id('portfolio-tab');
+
+		// Add touch and mouse support
 		portfolioTab.mousePressed(() => {
 			this._handlePortfolioTab();
-			return false; // Prevent global mousePressed
+			return false;
 		});
+		portfolioTab.touchStarted(() => {
+			this._handlePortfolioTab();
+			return false;
+		});
+
 		this.state.dom.toolbarDiv.child(portfolioTab);
 	}
 
@@ -168,6 +203,8 @@ class UIEngine {
 		portfolioList.style('overflow-y', 'scroll');
 		portfolioList.style('overflow-x', 'hidden');
 		portfolioList.style('-webkit-overflow-scrolling', 'touch');
+		portfolioList.style('transform', 'translateZ(0)');  // Force hardware acceleration
+		portfolioList.style('will-change', 'transform');  // Optimize for transforms
 		portfolioList.style('display', 'none');
 		portfolioList.style('opacity', '0');
 		portfolioList.style('padding', '40px 20px');
@@ -658,6 +695,8 @@ class UIEngine {
 			newContainer.style('opacity', '0');
 			newContainer.style('pointer-events', 'none');
 			newContainer.style('transition', 'opacity 0.3s, transform 0.3s');
+			newContainer.style('transform', 'translateZ(0)');  // Force hardware acceleration
+			newContainer.style('will-change', 'transform, opacity');  // Optimize for animation
 			newContainer.style('padding', '40px 20px');
 			newContainer.style('flex-direction', 'column');
 			newContainer.style('align-items', 'center');
@@ -717,10 +756,8 @@ class UIEngine {
 						if (subItem === 'biebl') {
 							// Open null menu (animation/audio without container)
 							this._openPortfolioSection(subItem, audioConfig, true); // true = isNullMenu
-							// Activate biebl mode after brief delay for animation to start
-							setTimeout(() => {
-								this.mediaController.activateBieblMode();
-							}, 100);
+							// Activate biebl mode immediately (video already preloaded)
+							this.mediaController.activateBieblMode();
 							return;
 						}
 
@@ -830,9 +867,16 @@ class UIEngine {
 		itemDiv.style('font-size', '20px');
 		itemDiv.style('color', 'white');
 		itemDiv.style('padding', '15px 30px');
+		itemDiv.style('min-width', '44px'); // iOS minimum touch target
+		itemDiv.style('min-height', '44px'); // iOS minimum touch target
 		itemDiv.style('cursor', 'pointer');
+		itemDiv.style('transform', 'translateZ(0)');
+		itemDiv.style('will-change', 'background-color, filter, opacity');
 		itemDiv.style('transition', 'background-color 0.2s, filter 0.2s, opacity 0.3s');
 		itemDiv.style('text-align', 'center');
+		itemDiv.style('user-select', 'none');
+		itemDiv.style('-webkit-user-select', 'none');
+		itemDiv.style('-webkit-tap-highlight-color', 'transparent');
 		itemDiv.style('width', 'fit-content');
 		itemDiv.style('background-color', 'rgba(0, 0, 0, 0.3)');
 		itemDiv.style('border-radius', '5px');
@@ -894,6 +938,10 @@ class UIEngine {
 		});
 
 		itemDiv.elt.addEventListener('click', clickHandler);
+		itemDiv.elt.addEventListener('touchend', (e) => {
+			e.preventDefault(); // Prevent 300ms delay on mobile
+			clickHandler(e);
+		}, { passive: false });
 
 		return itemDiv;
 	}

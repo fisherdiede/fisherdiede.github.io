@@ -64,9 +64,18 @@ class VisualEngine {
 		const pattern = [{ time: 0, note: 'random' }];
 		let oscData = this.audioEngine.spawnPattern(pattern, { x, y });
 
-		// Create img element
-		let img = document.createElement('img');
-		img.src = this.state.assets.spawnerImages[imgIndex].path;
+		// Use preloaded image if available, otherwise create new
+		let img = this.state.assets.preloadedImage || document.createElement('img');
+
+		// If using preloaded image, clone it to avoid reusing the same element
+		if (this.state.assets.preloadedImage) {
+			let preloadedSrc = img.src;
+			img = document.createElement('img');
+			img.src = preloadedSrc;
+		} else {
+			img.src = this.state.assets.spawnerImages[imgIndex].path;
+		}
+
 		img.style.position = 'absolute';
 		img.style.left = x + 'px';
 		img.style.top = y + 'px';
@@ -75,8 +84,10 @@ class VisualEngine {
 		img.style.objectFit = 'contain';
 		img.style.pointerEvents = 'none';
 		img.style.zIndex = '10';
-		img.style.transform = 'translate(-50%, -50%)';
+		img.style.transform = 'translate(-50%, -50%) translateZ(0)';
+		img.style.willChange = 'transform, opacity';
 		img.style.transition = 'opacity 1s ease-out';
+
 		// Apply transparency vignette via mask - square vignette on all edges
 		img.style.webkitMaskImage = 'linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%), linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)';
 		img.style.maskImage = 'linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%), linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)';
@@ -167,9 +178,19 @@ class VisualEngine {
 			}
 		}
 
-		// Create video element
-		let video = document.createElement('video');
-		video.src = videoData.path;
+		// Create video element - use preloaded if available for spawner mode
+		let video;
+		if (spawnerConfig && this.state.assets.preloadedSpawnerVideo &&
+		    this.state.assets.preloadedSpawnerVideo.src.includes(videoData.path)) {
+			// Use preloaded video for instant playback
+			video = this.state.assets.preloadedSpawnerVideo;
+			this.state.assets.preloadedSpawnerVideo = null;  // Clear so it's not reused
+		} else {
+			// Create new video element
+			video = document.createElement('video');
+			video.src = videoData.path;
+		}
+
 		video.style.position = 'absolute';
 		video.style.left = x + 'px';
 		video.style.top = y + 'px';
@@ -198,7 +219,8 @@ class VisualEngine {
 		video.style.objectFit = 'contain';
 		video.style.pointerEvents = 'none';
 		video.style.zIndex = '10';
-		video.style.transform = 'translate(-50%, -50%)';
+		video.style.transform = 'translate(-50%, -50%) translateZ(0)';
+		video.style.willChange = 'transform, opacity';
 		video.style.transition = 'opacity 1s ease-out';
 		// Apply transparency vignette via mask - square vignette on all edges
 		video.style.webkitMaskImage = 'linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%), linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)';
@@ -324,6 +346,40 @@ class VisualEngine {
 
 		// Call spawnVideo with the specific video data and config
 		this.spawnVideo(x, y, videoData, spawnerConfig);
+
+		// Preload next video in sequence for better responsiveness
+		this.preloadNextSpawnerVideo(spawnerConfig);
+	}
+
+	/**
+	 * Preload next spawner video for instant playback
+	 * @param {Object} spawnerConfig - Spawner configuration object
+	 */
+	preloadNextSpawnerVideo(spawnerConfig) {
+		if (!spawnerConfig || !spawnerConfig.videoSet || spawnerConfig.videoSet.length === 0) {
+			return;
+		}
+
+		// Get next video in sequence
+		let nextVideoIndex;
+		if (spawnerConfig.playbackMode === 'sequential') {
+			nextVideoIndex = spawnerConfig.currentIndex % spawnerConfig.videoSet.length;
+		} else {
+			nextVideoIndex = Math.floor(Math.random() * spawnerConfig.videoSet.length);
+		}
+
+		let nextVideoData = spawnerConfig.videoSet[nextVideoIndex];
+		if (!nextVideoData || !nextVideoData.path) {
+			return;
+		}
+
+		// Create and preload video element
+		let video = document.createElement('video');
+		video.src = nextVideoData.path;
+		video.preload = 'auto';
+		video.muted = true;
+		video.playsInline = true;
+		this.state.assets.preloadedSpawnerVideo = video;
 	}
 
 	/**
@@ -471,6 +527,8 @@ class VisualEngine {
 		ticker.style.border = 'none';
 		ticker.style.borderRadius = '5px';
 		ticker.style.zIndex = '100';
+		ticker.style.transform = 'translateZ(0)';
+		ticker.style.willChange = 'bottom, opacity';
 		ticker.style.transition = 'bottom 0.3s ease-out';
 		ticker.style.pointerEvents = 'none';
 		ticker.style.wordWrap = 'break-word';
@@ -583,8 +641,10 @@ class VisualEngine {
 
 			if (fadeElapsed < animDuration) {
 				// === Mouse proximity filter modulation (shared code) ===
+				// Throttle filter updates to reduce audio thread blocking
 				if (oscDataArray.length > 0 && !this.state.device.isTouchDevice &&
-					!this.state.ui.isHoveringWelcome && !this.state.ui.showProfile) {
+					!this.state.ui.isHoveringWelcome && !this.state.ui.showProfile &&
+					frameCounter % this.config.AUDIO_UPDATE_THROTTLE === 0) {
 					let centerX = windowWidth / 2;
 					let centerY = windowHeight / 2;
 					let d = dist(mouseX, mouseY, centerX, centerY);
@@ -750,16 +810,16 @@ class VisualEngine {
 	}
 
 	_startVideoAnimation(video, ticker, oscData, startX, startY, config, actualVideoDuration, videoData) {
-		// Setup video audio through audio engine
-		let initialGain = (config.fadeInTime && config.fadeInTime > 0) ? 0 : 1.0;
-		let videoAudioNodes = this.audioEngine.playVideoAudio(videoData.path, { x: startX, y: startY }, initialGain);
-
 		// Pass actualVideoDuration through config so it's available in _startAnimation
 		const animConfig = { ...config };
 		if (config.duration === 'full' && config.speed === 'normal') {
 			// For full-duration normal-speed videos, use actualVideoDuration
 			animConfig.actualVideoDuration = actualVideoDuration;
 		}
+
+		// Setup video audio through audio engine
+		let initialGain = (animConfig.fadeInTime && animConfig.fadeInTime > 0) ? 0 : 1.0;
+		let videoAudioNodes = this.audioEngine.playVideoAudio(videoData.path, { x: startX, y: startY }, initialGain);
 
 		this._startAnimation({
 			element: video,
