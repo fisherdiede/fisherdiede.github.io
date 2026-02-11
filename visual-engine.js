@@ -156,6 +156,15 @@ class VisualEngine {
 		// Set flag to block other spawns while video is playing
 		this.state.visual.videoIsPlaying = true;
 
+		// Safety timeout to clear flag if something goes wrong (use longest possible video duration + buffer)
+		const maxVideoDuration = (config.duration === 'full' ? 300 : config.fixedDuration) + 10; // 5 min max + 10s buffer
+		const safetyTimeout = setTimeout(() => {
+			if (this.state.visual.videoIsPlaying) {
+				console.warn('Video playing flag stuck, clearing...');
+				this.state.visual.videoIsPlaying = false;
+			}
+		}, maxVideoDuration * 1000);
+
 		// Only create oscillator if config specifies it
 		let oscData = null;
 		let audioContext = getAudioContext();
@@ -180,10 +189,12 @@ class VisualEngine {
 
 		// Create video element - use preloaded if available for spawner mode
 		let video;
+		let wasPreloaded = false;
 		if (spawnerConfig && this.state.assets.preloadedSpawnerVideo &&
 		    this.state.assets.preloadedSpawnerVideo.src.includes(videoData.path)) {
 			// Use preloaded video for instant playback
 			video = this.state.assets.preloadedSpawnerVideo;
+			wasPreloaded = true;
 			this.state.assets.preloadedSpawnerVideo = null;  // Clear so it's not reused
 		} else {
 			// Create new video element
@@ -270,6 +281,12 @@ class VisualEngine {
 		};
 
 		video.addEventListener('loadedmetadata', handleMetadata, { once: true });
+
+		// If using preloaded video, metadata might already be loaded
+		if (wasPreloaded && video.readyState >= 1) {
+			// Metadata already available, trigger handler immediately
+			handleMetadata();
+		}
 
 		document.body.appendChild(video);
 
@@ -465,6 +482,11 @@ class VisualEngine {
 			this.state.visual.videoIsPlaying = false;
 		}
 
+		// Clear safety timeout if exists
+		if (animState.safetyTimeout) {
+			clearTimeout(animState.safetyTimeout);
+		}
+
 		// Cancel any pending animation frame
 		if (animState.animationFrame) {
 			cancelAnimationFrame(animState.animationFrame);
@@ -563,7 +585,7 @@ class VisualEngine {
 	 * @param {boolean} params.isVideo - Whether this is a video (for cleanup logic)
 	 */
 	_startAnimation(params) {
-		const { element, ticker, oscData, videoAudioNodes, startX, startY, config, isVideo } = params;
+		const { element, ticker, oscData, videoAudioNodes, startX, startY, config, isVideo, safetyTimeout } = params;
 
 		// Calculate movement based on config
 		let angle = random(TWO_PI);
@@ -613,6 +635,7 @@ class VisualEngine {
 			oscData: oscData,
 			videoAudioNodes: videoAudioNodes || {},
 			isVideo: isVideo,
+			safetyTimeout: safetyTimeout, // Timeout to clear videoIsPlaying flag
 			animationFrame: null,
 			forceStartFadeOut: false,
 			fadeOutStartTime: null,
@@ -782,6 +805,11 @@ class VisualEngine {
 
 				if (isVideo) {
 					this.state.visual.videoIsPlaying = false;
+				}
+
+				// Clear safety timeout if exists
+				if (safetyTimeout) {
+					clearTimeout(safetyTimeout);
 				}
 
 				let animIndex = this.activeAnimations.indexOf(animationState);

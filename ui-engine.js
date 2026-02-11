@@ -873,6 +873,9 @@ class UIEngine {
 		itemDiv.style('transform', 'translateZ(0)');
 		itemDiv.style('will-change', 'background-color, filter, opacity');
 		itemDiv.style('transition', 'background-color 0.2s, filter 0.2s, opacity 0.3s');
+		itemDiv.style('display', 'flex');
+		itemDiv.style('align-items', 'center');
+		itemDiv.style('justify-content', 'center');
 		itemDiv.style('text-align', 'center');
 		itemDiv.style('user-select', 'none');
 		itemDiv.style('-webkit-user-select', 'none');
