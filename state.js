@@ -16,6 +16,9 @@ window.appState = {
     hasSpawnedMedia: false,
     portfolioStack: [], // Stack-based portfolio navigation
     portfolioContainerCounter: 0,
+    // Menu auto-hide
+    menuAutoHideTimer: null,
+    menuVisible: true,
     // Welcome button transition
     buttonScale: 1.0,
     welcomeTransitionStartTime: null,
@@ -56,6 +59,7 @@ window.appState = {
     spawnerImages: [],
     spawnerVideos: [],
     bieblVideos: [],
+    vaultSongs: {}, // Map of folder name -> array of songs
     imageOrder: [],
     videoOrder: [],
     currentImageIndex: 0,
@@ -78,14 +82,28 @@ window.appState = {
     canvas: null,
     checkerboardDiv: null,
     toolbarDiv: null,
-    profileImg: null
+    profileImg: null,
+    youtubePlayer: null, // YouTube IFrame Player instance
+    overlay: null, // General-purpose overlay for UI content and mouse capture
+    audioPlayer: null, // HTML5 audio element for playing songs
+    nameBackground: null, // Profile name background with blur
+    bioTitleBackground: null, // Profile bio title background with blur
+    emailBackground: null // Profile email background with blur
+  },
+
+  // YouTube video state
+  youtube: {
+    sevenLastWordsTimestamp: 0 // Stored timestamp for resuming
   },
 
   // Portfolio configuration
   portfolioItems: ['multicapo', 'pulling strings', 'music', 'singing bowl', 'pachinko', 'space charmer', 'temp-o-whirl', 'maestro', 'dynamic tv backlight', 'rhodes'],
 
   portfolioSections: {
-    'music': ['recent demos', 'reference section', 'the friars', 'ummgc', 'the vault'],
-    'the friars': ['biebl', 'streaming']
+    'music': ['the vault', 'the friars', 'ummgc', 'reference section'],
+    'the friars': ['biebl', 'streaming'],
+    'ummgc': ['seven last words of the unarmed'],
+    'the vault': ['08112025'],
+    '08112025': [] // Will be populated dynamically from vaultSongs['08112025']
   }
 };

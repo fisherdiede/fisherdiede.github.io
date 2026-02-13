@@ -1,7 +1,3 @@
-// ==================== STATE AND CONFIG ====================
-// appState and CONFIG are loaded from state.js and config.js
-// They are available globally via window.appState and window.CONFIG
-
 // ==================== ENGINES ====================
 let audioEngine;
 let visualEngine;
@@ -56,6 +52,9 @@ function setup() {
 
 	// Load biebl videos from manifest
 	loadStrings('assets/visual/biebl/manifest.txt', onBieblVideoManifestLoaded);
+
+	// Load vault/08112025 songs from manifest
+	loadStrings('assets/audio/vault/08112025/manifest.txt', on08112025ManifestLoaded);
 }
 
 // ==================== HELPER FUNCTIONS ====================
@@ -134,6 +133,35 @@ function onBieblVideoManifestLoaded(manifest) {
 	loadManifest(manifest, 'bieblVideos', 'assets/visual/biebl/', {
 		skipComments: true
 	});
+}
+
+function on08112025ManifestLoaded(manifest) {
+	// Initialize the array for this vault folder
+	appState.assets.vaultSongs['08112025'] = [];
+
+	// Load songs into the vault folder
+	for (let i = 0; i < manifest.length; i++) {
+		let line = manifest[i].trim();
+		if (!line) continue;
+
+		if (line.includes(' | ')) {
+			let parts = line.split(' | ');
+			let filename = parts[0].trim();
+			let caption = parts[1].trim();
+			appState.assets.vaultSongs['08112025'].push({
+				path: 'assets/audio/vault/08112025/' + filename,
+				caption: caption
+			});
+		} else {
+			appState.assets.vaultSongs['08112025'].push({
+				path: 'assets/audio/vault/08112025/' + line,
+				caption: generateCaption(line)
+			});
+		}
+	}
+
+	// Populate '08112025' portfolio section with song names
+	appState.portfolioSections['08112025'] = appState.assets.vaultSongs['08112025'].map(song => song.caption);
 }
 
 function shuffleArray(array) {

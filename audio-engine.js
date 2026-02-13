@@ -547,9 +547,10 @@ class AudioEngine {
    * @param {Object} adsr - Optional ADSR envelope (defaults to ADSR_PORTFOLIO)
    * @param {Array} frequencies - Optional pre-generated frequencies [freq1, freq2]
    * @param {number} depth - Menu depth level (0, 1, 2) for audio characteristics
+   * @param {boolean} isActionable - Whether item opens submenu or triggers special mode (affects interval ratio)
    * @returns {Object} Audio config { frequencies: [freq1, freq2], adsr: envelope, depth: depth }
    */
-  playPortfolioItem(adsr = null, frequencies = null, depth = 0) {
+  playPortfolioItem(adsr = null, frequencies = null, depth = 0, isActionable = true) {
     // Use provided ADSR or default to portfolio wah-like envelope
     const envelope = adsr || this.config.ADSR_PORTFOLIO;
 
@@ -568,13 +569,14 @@ class AudioEngine {
       freq1 = frequencies[0];
       freq2 = frequencies[1];
     } else {
-      // Generate random frequency between min and max for this depth
-      const minFreq = this.noteMap[audioConfig.minNote];
-      const maxFreq = this.noteMap[audioConfig.maxNote];
-      freq1 = minFreq + Math.random() * (maxFreq - minFreq);
+      // Use fixed root frequency for this depth
+      freq1 = audioConfig.rootFrequency;
 
-      // Second note is at the interval ratio for this depth
-      freq2 = freq1 * audioConfig.intervalRatio;
+      // Choose interval ratio: 5/4 for actionable items, 16/9 for leaf items
+      const intervalRatio = isActionable ? (5 / 4) : (16 / 9);
+
+      // Second note at the interval ratio
+      freq2 = freq1 * intervalRatio;
     }
 
     // Two notes at time 0 (harmony)
@@ -595,14 +597,6 @@ class AudioEngine {
       adsr: envelope,
       depth: depth
     };
-  }
-
-  /**
-   * Play portfolio submenu audio feedback (deprecated - use playPortfolioItem with depth parameter)
-   * @deprecated Use playPortfolioItem(adsr, frequencies, depth) instead
-   */
-  playPortfolioSubmenu(adsr = null, frequencies = null) {
-    return this.playPortfolioItem(adsr, frequencies, 1);
   }
 
   /**
