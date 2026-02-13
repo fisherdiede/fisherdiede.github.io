@@ -481,6 +481,11 @@ class MediaController {
 			e.stopPropagation();
 			audio.currentTime = Math.max(0, audio.currentTime - 15);
 		});
+		skipBackButton.addEventListener('touchend', (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			audio.currentTime = Math.max(0, audio.currentTime - 15);
+		});
 		skipBackButton.addEventListener('mouseenter', () => {
 			skipBackButton.style.transform = 'scale(1.1)';
 			skipBackButton.style.filter = 'brightness(1.3)';
@@ -591,6 +596,11 @@ class MediaController {
 		skipForwardButton.style.pointerEvents = 'auto';
 
 		skipForwardButton.addEventListener('click', (e) => {
+			e.stopPropagation();
+			audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 15);
+		});
+		skipForwardButton.addEventListener('touchend', (e) => {
+			e.preventDefault();
 			e.stopPropagation();
 			audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 15);
 		});
@@ -712,6 +722,8 @@ class MediaController {
 		// Touch support
 		progressTrack.addEventListener('touchstart', (e) => {
 			e.stopPropagation();
+			isDragging = true;
+			dragStartWasPlaying = !audio.paused;
 			const touch = e.touches[0];
 			updateVisualProgress(touch.clientX);
 		});
@@ -728,13 +740,14 @@ class MediaController {
 			e.stopPropagation();
 			const touch = e.changedTouches[0];
 			const percent = updateVisualProgress(touch.clientX);
-			const wasPlaying = !audio.paused;
+			const wasPlaying = dragStartWasPlaying;
 
 			audio.currentTime = percent * audio.duration;
 
 			if (wasPlaying) {
 				audio.play();
 			}
+			isDragging = false;
 		});
 
 		// Assemble progress bar

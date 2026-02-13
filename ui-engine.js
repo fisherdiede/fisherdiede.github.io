@@ -579,6 +579,10 @@ class UIEngine {
 				let targetOpacity = this.state.ui.menuVisible ? this.state.ui.fadeAmount : 0;
 				portfolioList.style('opacity', targetOpacity.toString());
 				this.state.dom.canvas.style('pointer-events', 'none');
+				// Fade out profile backgrounds
+				this.state.dom.nameBackground.style('opacity', (1 - this.state.ui.fadeAmount).toString());
+				this.state.dom.bioTitleBackground.style('opacity', (1 - this.state.ui.fadeAmount).toString());
+				this.state.dom.emailBackground.style('opacity', (1 - this.state.ui.fadeAmount).toString());
 			} else {
 				// Fading into profile - fade out portfolio
 				portfolioList.style('display', 'flex');
@@ -595,6 +599,10 @@ class UIEngine {
 			if (this.state.ui.currentSection === 'portfolio') {
 				portfolioList.style('display', 'flex');
 				this.state.dom.canvas.style('pointer-events', 'none');
+				// Hide profile backgrounds when in portfolio section
+				this.state.dom.nameBackground.style('opacity', '0');
+				this.state.dom.bioTitleBackground.style('opacity', '0');
+				this.state.dom.emailBackground.style('opacity', '0');
 				// Don't draw profile content on canvas
 				clear();
 				this._drawCheckerboard(this.config.CHECKERBOARD_OPACITY);
@@ -956,7 +964,7 @@ class UIEngine {
 				// Reverse collapse animation if enabled
 				if (this.config.MENU_COLLAPSE_ANIMATION) {
 					items[i].style.transition = 'transform 0.3s ease-out, opacity 0.3s ease-out';
-					items[i].style.transform = 'translateY(0)';
+					items[i].style.transform = 'none';
 					items[i].style.opacity = '1';
 				} else {
 					items[i].style.opacity = '1';
@@ -1403,12 +1411,16 @@ class UIEngine {
 			portfolioList.style('overflow-y', 'scroll');
 			this._updateContainerItemsOpacity(portfolioList, 1);
 
-			// Clear stored audio configs from portfolio items
+			// Clear stored audio configs and transforms from portfolio items
 			let allItems = portfolioList.elt.querySelectorAll('.portfolio-item, .portfolio-nav-item');
 			allItems.forEach(item => {
 				if (item._storedAudioConfig) {
 					item._storedAudioConfig = null;
 				}
+				// Clear any collapse animation transforms
+				item.style.transform = '';
+				item.style.transition = '';
+				item.removeAttribute('data-parent-level');
 			});
 		}
 
