@@ -48,8 +48,8 @@ window.CONFIG = {
   MENU_ITEM_MIN_TOUCH_SIZE: 44, // Minimum touch target size for iOS (pixels)
 
   // Menu animation/positioning
-  MENU_SHIFT_HORIZONTAL: -70,  // Horizontal shift in pixels per depth (positive = right, negative = left)
-  MENU_SHIFT_VERTICAL: 20,  // Vertical shift in pixels per depth (positive = up, negative = down)
+  MENU_SHIFT_HORIZONTAL: -105,  // Horizontal shift in pixels per depth (positive = right, negative = left)
+  MENU_SHIFT_VERTICAL: 35,  // Vertical shift in pixels per depth (positive = up, negative = down)
   MENU_SCALE_REDUCTION: 0,  // Scale reduction per depth level (0.125 = 12.5% smaller per level)
   MENU_COLLAPSE_ANIMATION: true,  // Whether to collapse non-selected items when opening submenu
 

@@ -310,7 +310,7 @@ class MediaController {
 		wrapperDiv.appendChild(playerDiv);
 		document.body.appendChild(wrapperDiv);
 
-		// Get stored timestamp for "seven last words of the unarmed"
+		// Get stored timestamp for "7LW"
 		const startSeconds = this.state.youtube.sevenLastWordsTimestamp || 0;
 
 		// Create YouTube player
