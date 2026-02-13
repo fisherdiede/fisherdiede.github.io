@@ -1,8 +1,12 @@
 // ==================== CONFIGURATION ====================
 
+// Chakra/Solfeggio frequency scale
+const CHAKRA_SCALE = [396, 417, 528, 639, 741, 852, 963];
+
 // Make CONFIG available globally for p5.js
 window.CONFIG = {
-  // Animation settings
+  // ==================== VISUAL SETTINGS - MEDIA ====================
+
   ANIMATION_DURATION: 10, // Total animation time in seconds
   ANIMATION_FADE_START_TIME: 6, // Fade duration (4s sustain + 6s fade = 10s total)
   ANIMATION_SCALE_GROWTH: 2, // How much to grow (1 = no growth, 2 = double size)
@@ -10,8 +14,11 @@ window.CONFIG = {
   ANIMATION_SPEED_MAX: 0.1,
   MEDIA_SIZE_MIN: 150,
   MEDIA_SIZE_MAX: 300,
+  SPAWN_MIN_IMAGES_BEFORE_VIDEO: 4, // minimum number of images to spawn before allowing a video
+  SPAWN_VIDEO_PROBABILITY: 0.1, // probability (0-1) of spawning a video when eligible
 
-  // UI settings
+  // ==================== VISUAL SETTINGS - UI (WELCOME/PROFILE) ====================
+
   BUTTON_WIDTH: 200,
   BUTTON_HEIGHT: 60,
   BUTTON_RADIUS: 10,
@@ -19,8 +26,10 @@ window.CONFIG = {
   CHECKERBOARD_SQUARE_SIZE: 4,
   CHECKERBOARD_OPACITY: 84,
   CHECKERBOARD_FADE_TIME: 0.6, // seconds - how long to fade in checkerboard on hover
+  BACKDROP_BLUR: 3, // pixels - backdrop filter blur amount for UI elements
 
-  // Ticker settings
+  // ==================== VISUAL SETTINGS - TICKER ====================
+
   TICKER_LEFT_MARGIN: 20, // pixels from left edge
   TICKER_RIGHT_MARGIN: 20, // pixels from right edge
   TICKER_BOTTOM_MARGIN: 20, // pixels from bottom edge
@@ -28,7 +37,36 @@ window.CONFIG = {
   TICKER_SPACING: 10, // pixels between ticker boxes
   TICKER_FONT_SIZE: 14,
 
-  // Audio settings
+  // ==================== VISUAL SETTINGS - MENU/PORTFOLIO ====================
+
+  // Menu item appearance
+  MENU_ITEM_FONT_SIZE: 20, // Font size in pixels
+  MENU_ITEM_PADDING_VERTICAL: 15, // Top/bottom padding in pixels
+  MENU_ITEM_PADDING_HORIZONTAL: 30, // Left/right padding in pixels
+  MENU_ITEM_GAP: 10, // Space between menu items in pixels
+  MENU_ITEM_BORDER_RADIUS: 5, // Border radius in pixels
+  MENU_ITEM_MIN_TOUCH_SIZE: 44, // Minimum touch target size for iOS (pixels)
+
+  // Menu animation/positioning
+  MENU_SHIFT_HORIZONTAL: -70,  // Horizontal shift in pixels per depth (positive = right, negative = left)
+  MENU_SHIFT_VERTICAL: 20,  // Vertical shift in pixels per depth (positive = up, negative = down)
+  MENU_SCALE_REDUCTION: 0,  // Scale reduction per depth level (0.125 = 12.5% smaller per level)
+  MENU_COLLAPSE_ANIMATION: true,  // Whether to collapse non-selected items when opening submenu
+
+  // Menu opacity when navigating deeper
+  MENU_DIMMED_OPACITY: 0.2,  // Opacity for non-selected items when submenu opens
+  MENU_SELECTED_OPACITY: 0.6,  // Opacity for the selected item when submenu opens
+
+  // Menu auto-hide on inactivity
+  MENU_AUTOHIDE_DELAY: 2500,  // Milliseconds of inactivity before menu fades out
+  MENU_AUTOHIDE_TRANSITION: 2500,  // Milliseconds for fade transition
+
+  // YouTube video transitions
+  YOUTUBE_FADE_IN_TIME: 1000,  // Milliseconds for video/audio fade in
+  YOUTUBE_FADE_OUT_TIME: 500,  // Milliseconds for video/audio fade out
+
+  // ==================== AUDIO SETTINGS - EFFECTS ====================
+
   AUDIO_ENABLE_VIBRATO: true, // Set to true to enable vibrato effect on hover
   AUDIO_VIBRATO_RATE_MIN: 0.5, // Hz - minimum vibrato speed
   AUDIO_VIBRATO_RATE_MAX: 10, // Hz - maximum vibrato speed
@@ -38,8 +76,28 @@ window.CONFIG = {
   AUDIO_FILTER_CUTOFF_MAX: 5000, // Hz - filter cutoff at screen center
   AUDIO_FILTER_RAMP_TIME: 0.02, // seconds - ramp time for filter frequency changes
   AUDIO_FILTER_HOLD_RAMP_TIME: 0.2, // seconds - ramp time when holding filter at max
+  AUDIO_AMPLITUDE: 0.3, // oscillator amplitude
+  AUDIO_HOVER_AMPLITUDE_MULTIPLIER: 0.1, // hover audio quieter than normal (25% of click volume)
+  AUDIO_UPDATE_THROTTLE: 3, // Update vibrato every N frames
+  AUDIO_AMPLITUDE_FADE_THROTTLE: 3, // Update amplitude fade every N frames
 
-  // ADSR envelope presets for different audio generation modes
+  // Reverb settings
+  AUDIO_SUBTLE_REVERB_DURATION: 2, // seconds - subtle reverb duration
+  AUDIO_SUBTLE_REVERB_DECAY: 2, // decay rate for subtle reverb
+  AUDIO_SUBTLE_REVERB_DRYWET: 0.2, // 20% wet, 80% dry
+  AUDIO_REVERB_FADE_IN_TIME: 0.0, // seconds - fade in time for reverb bus send
+  AUDIO_REVERB_FADE_OUT_TIME: 10.0, // seconds - fade out time for reverb bus send
+  AUDIO_REVERB_DURATION: 6, // seconds - reverb duration
+  AUDIO_REVERB_DECAY: 3, // decay rate (higher = more intense)
+  AUDIO_REVERB_DRYWET: 1, // 0 = fully dry, 1 = fully wet
+
+  // Video audio effects
+  AUDIO_VIDEO_FILTER_FREQ: 4000, // Hz - lowpass filter cutoff frequency
+  AUDIO_VIDEO_REVERB_DURATION: 8, // seconds - reverb duration (increased for intensity)
+  AUDIO_VIDEO_REVERB_DECAY: 3, // decay rate (increased for intensity)
+
+  // ==================== AUDIO SETTINGS - ENVELOPES (ADSR) ====================
+
   ADSR_WELCOME: {
     attack: 0.1,      // seconds - fade in time
     decay: 0.3,       // seconds - decay to sustain level
@@ -71,26 +129,9 @@ window.CONFIG = {
     release: 0.01     // seconds - very fast release
   },
 
-  AUDIO_AMPLITUDE: 0.3, // oscillator amplitude
-  AUDIO_HOVER_AMPLITUDE_MULTIPLIER: 0.1, // hover audio quieter than normal (25% of click volume)
-  AUDIO_SUBTLE_REVERB_DURATION: 2, // seconds - subtle reverb duration
-  AUDIO_SUBTLE_REVERB_DECAY: 2, // decay rate for subtle reverb
-  AUDIO_SUBTLE_REVERB_DRYWET: 0.2, // 20% wet, 80% dry
-  AUDIO_REVERB_FADE_IN_TIME: 0.0, // seconds - fade in time for reverb bus send
-  AUDIO_REVERB_FADE_OUT_TIME: 10.0, // seconds - fade out time for reverb bus send
-  AUDIO_REVERB_DURATION: 6, // seconds - reverb duration
-  AUDIO_REVERB_DECAY: 3, // decay rate (higher = more intense)
-  AUDIO_REVERB_DRYWET: 1, // 0 = fully dry, 1 = fully wet
-  AUDIO_UPDATE_THROTTLE: 3, // Update vibrato every N frames
-  AUDIO_AMPLITUDE_FADE_THROTTLE: 3, // Update amplitude fade every N frames
-  TAB_CHORD_SPACING: 0.06, // seconds - delay between each note in tab chord
+  // ==================== AUDIO SETTINGS - MUSICAL/NOTES ====================
 
-  // Video audio effects settings
-  AUDIO_VIDEO_FILTER_FREQ: 4000, // Hz - lowpass filter cutoff frequency
-  AUDIO_VIDEO_REVERB_DURATION: 8, // seconds - reverb duration (increased for intensity)
-  AUDIO_VIDEO_REVERB_DECAY: 3, // decay rate (increased for intensity)
-  SPAWN_MIN_IMAGES_BEFORE_VIDEO: 4, // minimum number of images to spawn before allowing a video
-  SPAWN_VIDEO_PROBABILITY: 0.1, // probability (0-1) of spawning a video when eligible
+  TAB_CHORD_SPACING: 0.06, // seconds - delay between each note in tab chord
 
   // Chord definitions (note names)
   CHORD_TAB_PROFILE: ['Eb5', 'F5', 'G5', 'Ab5', 'Bb5'],
@@ -130,31 +171,17 @@ window.CONFIG = {
     [1244.51, 1]   // Eb6
   ],
 
-  // Portfolio menu audio feedback configuration by depth
-  MENU_AUDIO: {
-    // Depth 0: Top-level portfolio items (code, audio, design, etc.)
-    depth0: {
-      minNote: 'Eb3',
-      maxNote: 'Eb4',
-      intervalRatio: 5 / 4,  // Major third
-      intervalName: 'major third'
-    },
-    // Depth 1: First-level submenus (the friars, apps, etc.)
-    depth1: {
-      minNote: 'Eb4',
-      maxNote: 'Eb5',
-      intervalRatio: 16 / 9,  // Minor seventh
-      intervalName: 'minor seventh'
-    },
-    // Depth 2: Second-level submenus (biebl, streaming, etc.)
-    depth2: {
-      minNote: 'Eb5',
-      maxNote: 'Eb6',
-      intervalRatio: 3 / 2,  // Perfect fifth
-      intervalName: 'perfect fifth'
-    }
-  },
+  // Chakra/Solfeggio frequencies
+  CHAKRA_NOTES: CHAKRA_SCALE,
 
-  // Portfolio configuration
-  PORTFOLIO_SHIFT_AMOUNT: -125
+  // Portfolio menu audio feedback configuration by depth
+  // Interval ratios: 5/4 (major third) for actionable items, 16/9 (minor seventh) for leaf items
+  // Dynamically generated from CHAKRA_SCALE
+  MENU_AUDIO: (() => {
+    const config = {};
+    CHAKRA_SCALE.forEach((freq, index) => {
+      config[`depth${index}`] = { rootFrequency: freq };
+    });
+    return config;
+  })()
 };
