@@ -227,13 +227,13 @@ class UIEngine {
 		portfolioList.style('transform', 'translateX(0) translateY(0) scale(1) translateZ(0)');  // Initial position
 		portfolioList.style('transition', 'transform 0.3s ease-out');  // Add transition
 		portfolioList.style('will-change', 'transform');  // Optimize for transforms
-		portfolioList.style('display', 'none');
-		portfolioList.style('opacity', '0');
-		portfolioList.style('pointer-events', 'none'); // Let clicks pass through - items have pointer-events: auto
-		portfolioList.style('padding', '40px 20px');
+		portfolioList.style('display', 'flex');
 		portfolioList.style('flex-direction', 'column');
 		portfolioList.style('align-items', 'center');
 		portfolioList.style('justify-content', 'flex-start');
+		portfolioList.style('opacity', '0');
+		portfolioList.style('pointer-events', 'none'); // Let clicks pass through - items have pointer-events: auto
+		portfolioList.style('padding', '40px 0px');
 		portfolioList.style('overflow-y', 'auto');
 		portfolioList.style('-webkit-overflow-scrolling', 'touch');
 
@@ -863,7 +863,7 @@ class UIEngine {
 			// Start position: down and to the right, slightly smaller
 			newContainer.style('transform', 'translate(100px, 100px) scale(0.9) translateZ(0)');
 			newContainer.style('will-change', 'transform, opacity');  // Optimize for animation
-			newContainer.style('padding', '40px 20px');
+			newContainer.style('padding', '40px 0px');
 			newContainer.style('flex-direction', 'column');
 			newContainer.style('align-items', 'center');
 			newContainer.style('justify-content', 'flex-start');
@@ -991,10 +991,7 @@ class UIEngine {
 			portfolioList.style('transform', 'translateX(0) translateY(0) scale(1)');
 		}
 
-		// Only reset auto-hide timer if YouTube video is playing
-		if (this.state.dom.youtubePlayer) {
-			this._resetMenuAutoHideTimer();
-		}
+		// Timer already stopped above - don't restart it when returning to regular menu
 	}
 
 	// ==================== PRIVATE METHODS - HELPERS ====================
@@ -1087,7 +1084,7 @@ class UIEngine {
 	}
 
 	/**
-	 * Create click handler for submenu items (includes special handling for biebl, seven last words, vault songs)
+	 * Create click handler for submenu items (includes special handling for biebl, 7LW, vault songs)
 	 */
 	_createSubmenuClickHandler(subItem, currentDepth) {
 		return (event) => {
@@ -1114,7 +1111,7 @@ class UIEngine {
 
 			// Play portfolio submenu audio (one octave higher, 16/9 ratio)
 			// Use short ADSR for leaf items, wah-like ADSR for items with submenus
-			// Actionable items open submenus or trigger special modes (biebl, seven last words, vault songs)
+			// Actionable items open submenus or trigger special modes (biebl, 7LW, vault songs)
 
 			// Check if this is a vault song
 			let isVaultSong = false;
@@ -1125,7 +1122,7 @@ class UIEngine {
 				}
 			}
 
-			const isActionable = hasSubmenu || subItem === 'biebl' || subItem === 'seven last words of the unarmed' || isVaultSong;
+			const isActionable = hasSubmenu || subItem === 'biebl' || subItem === '7LW' || isVaultSong;
 			const adsr = isActionable ? this.config.ADSR_PORTFOLIO : this.config.ADSR_TAB;
 
 			// Use stored audio config from hover if available
@@ -1143,8 +1140,8 @@ class UIEngine {
 				return;
 			}
 
-			// Check if this is "seven last words of the unarmed" - open as null menu then play YouTube video
-			if (subItem === 'seven last words of the unarmed') {
+			// Check if this is "7LW" - open as null menu then play YouTube video
+			if (subItem === '7LW') {
 				// Open null menu (animation/audio without container)
 				this._openPortfolioSection(subItem, audioConfig, true); // true = isNullMenu
 				// Play YouTube video
@@ -1248,8 +1245,8 @@ class UIEngine {
 				}
 			}
 
-			// Actionable items open submenus or trigger special modes (biebl, seven last words, vault songs)
-			const isActionable = hasSubmenu || itemName === 'biebl' || itemName === 'seven last words of the unarmed' || isVaultSong;
+			// Actionable items open submenus or trigger special modes (biebl, 7LW, vault songs)
+			const isActionable = hasSubmenu || itemName === 'biebl' || itemName === '7LW' || isVaultSong;
 			const adsr = isActionable ? this.config.ADSR_PORTFOLIO : this.config.ADSR_TAB;
 
 			// Get audio config for this depth

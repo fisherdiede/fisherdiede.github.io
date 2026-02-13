@@ -160,8 +160,7 @@ function on08112025ManifestLoaded(manifest) {
 		}
 	}
 
-	// Populate '08112025' portfolio section with song names
-	appState.portfolioSections['08112025'] = appState.assets.vaultSongs['08112025'].map(song => song.caption);
+	// Portfolio section is now hardcoded in state.js, no need to populate it here
 }
 
 function shuffleArray(array) {

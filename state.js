@@ -102,8 +102,8 @@ window.appState = {
   portfolioSections: {
     'music': ['the vault', 'the friars', 'ummgc', 'reference section'],
     'the friars': ['biebl', 'streaming'],
-    'ummgc': ['seven last words of the unarmed'],
+    'ummgc': ['7LW'],
     'the vault': ['08112025'],
-    '08112025': [] // Will be populated dynamically from vaultSongs['08112025']
+    '08112025': ['gravity well', 'monochrome glow', 'hatchet', 'secrets out', 'hbd', 'better', 'watercolor pictures', 'look out', 'headshots (44)', 'ex toy (666)', 'no more', 'whole wide world', 'everlasting']
   }
 };
