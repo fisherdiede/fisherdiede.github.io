@@ -981,6 +981,11 @@ class UIEngine {
 		this.mediaController.exitSpawnerMode();
 		this.mediaController.stopAll();
 
+		// Deactivate bespoke fullscreen modes
+		if (closingEntry.itemName === 'muni') {
+			this.mediaController.deactivateMuniMode();
+		}
+
 		// Hide and remove the closing container (null for null menus, so this is skipped)
 		if (closingContainer) {
 			closingContainer.style('opacity', '0');
@@ -1075,7 +1080,7 @@ class UIEngine {
 
 			// Play portfolio item audio
 			// Use short ADSR for leaf items, wah-like ADSR for items with submenus
-			const isActionable = hasSubmenu;
+			const isActionable = hasSubmenu || item === 'muni';
 			const adsr = isActionable ? this.config.ADSR_PORTFOLIO : this.config.ADSR_TAB;
 
 			// Use stored audio config from hover if available
@@ -1087,6 +1092,15 @@ class UIEngine {
 			// Open sub-section if this item has one
 			if (hasSubmenu) {
 				this._openPortfolioSection(item, audioConfig);
+			}
+
+			// Muni - fullscreen real-time transit map
+			if (item === 'muni') {
+				event.target.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+				event.target.style.filter = 'brightness(1)';
+				this.mediaController.stopAllHoverAudio();
+				this._openPortfolioSection(item, audioConfig, true); // null menu
+				this.mediaController.activateMuniMode();
 			}
 		};
 	}
@@ -1254,7 +1268,7 @@ class UIEngine {
 			}
 
 			// Actionable items open submenus or trigger special modes (biebl, 7LW, vault songs)
-			const isActionable = hasSubmenu || itemName === 'biebl' || itemName === '7LW' || isVaultSong;
+			const isActionable = hasSubmenu || itemName === 'biebl' || itemName === '7LW' || itemName === 'muni' || isVaultSong;
 			const adsr = isActionable ? this.config.ADSR_PORTFOLIO : this.config.ADSR_TAB;
 
 			// Get audio config for this depth
