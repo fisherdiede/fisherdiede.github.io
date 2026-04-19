@@ -159,6 +159,47 @@ class MediaController {
 	}
 
 	/**
+	 * Activate MUNI real-time transit map
+	 */
+	activateMuniMode() {
+		// Create fullscreen overlay
+		const overlay = document.createElement('div');
+		overlay.id = 'muni-overlay';
+		overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:120;background:#000;opacity:0;transition:opacity 0.4s ease;';
+		document.body.appendChild(overlay);
+
+		// Create canvas
+		const canvas = document.createElement('canvas');
+		canvas.width = window.innerWidth;
+		canvas.height = window.innerHeight;
+		canvas.style.cssText = 'display:block;width:100%;height:100%;';
+		overlay.appendChild(canvas);
+
+		// Fade in
+		requestAnimationFrame(() => { overlay.style.opacity = '1'; });
+
+		this._muniOverlay = overlay;
+		this._muniEngine = new MuniEngine(canvas);
+		this._muniEngine.start();
+	}
+
+	/**
+	 * Deactivate MUNI mode and clean up
+	 */
+	deactivateMuniMode() {
+		if (!this._muniOverlay) return;
+		if (this._muniEngine) {
+			this._muniEngine.stop();
+			this._muniEngine = null;
+		}
+		const overlay = this._muniOverlay;
+		overlay.style.transition = 'opacity 0.5s ease';
+		overlay.style.opacity = '0';
+		setTimeout(() => { overlay.remove(); }, 500);
+		this._muniOverlay = null;
+	}
+
+	/**
 	 * Fade YouTube player volume over time
 	 * @param {Object} player - YouTube player instance
 	 * @param {number} startVolume - Starting volume (0-100)
