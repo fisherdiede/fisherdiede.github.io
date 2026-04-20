@@ -168,6 +168,16 @@ class MediaController {
 		overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:120;background:#000;opacity:0;transition:opacity 0.4s ease;';
 		document.body.appendChild(overlay);
 
+		// CSS loading spinner — removed by MuniEngine on first data
+		const style = document.createElement('style');
+		style.id = 'muni-spinner-style';
+		style.textContent = '@keyframes muni-spin{to{transform:translate(-50%,-50%) rotate(360deg)}}#muni-spinner{position:absolute;top:50%;left:50%;width:32px;height:32px;transform:translate(-50%,-50%);border:1.5px solid rgba(255,255,255,0.15);border-top-color:rgba(255,255,255,0.6);border-radius:50%;animation:muni-spin 1.2s linear infinite;}';
+		document.head.appendChild(style);
+
+		const spinner = document.createElement('div');
+		spinner.id = 'muni-spinner';
+		overlay.appendChild(spinner);
+
 		// Create canvas
 		const canvas = document.createElement('canvas');
 		canvas.width = window.innerWidth;
@@ -192,6 +202,8 @@ class MediaController {
 			this._muniEngine.stop();
 			this._muniEngine = null;
 		}
+		const style = document.getElementById('muni-spinner-style');
+		if (style) style.remove();
 		const overlay = this._muniOverlay;
 		overlay.style.transition = 'opacity 0.5s ease';
 		overlay.style.opacity = '0';

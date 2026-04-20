@@ -23,7 +23,7 @@ const MUNI_ROUTE_COLORS = {
 	'default': '#ffffff'
 };
 
-const MUNI_POLL_INTERVAL = 5000;  // ms
+const MUNI_POLL_INTERVAL = 30000;  // ms — keep conservative for dev; tune for prod
 const MUNI_HISTORY_MAX  = 20;     // snapshots retained per vehicle (~100s at 5s)
 
 class MuniEngine {
@@ -32,10 +32,11 @@ class MuniEngine {
 		this.ctx = canvas.getContext('2d');
 		this._interval = null;
 		this._abortController = null;
+		this._isLoading = true;
 		this._vehicles = [];
 		this._history = new Map(); // vehicleRef -> [{lat, lon, line}]
 		this._lastUpdated = null;
-		this._error = null;
+		this._failCount = 0;
 	}
 
 	start() {
@@ -56,7 +57,6 @@ class MuniEngine {
 		const apiKey = window.MUNI_LOCAL_KEY ?? MUNI_API_KEY;
 
 		if (apiKey === 'MUNI_API_KEY_PLACEHOLDER') {
-			this._error = 'no api key';
 			this._render();
 			return;
 		}
@@ -86,10 +86,16 @@ class MuniEngine {
 
 			this._updateHistory(this._vehicles);
 			this._lastUpdated = new Date();
-			this._error = null;
+			this._isLoading = false;
+			this._failCount = 0;
+
+			// Remove CSS spinner on first successful fetch
+			const spinner = document.getElementById('muni-spinner');
+			if (spinner) spinner.remove();
 		} catch (e) {
 			if (e.name !== 'AbortError') {
-				this._error = 'fetch failed';
+				this._failCount++;
+				console.error('[MuniEngine] fetch failed:', e.name, e.message);
 			}
 		}
 
@@ -143,13 +149,7 @@ class MuniEngine {
 			return;
 		}
 
-		if (this._error) {
-			ctx.fillStyle = 'rgba(255,255,255,0.4)';
-			ctx.font = '14px Courier New';
-			ctx.textAlign = 'center';
-			ctx.fillText(this._error, w / 2, h / 2);
-			return;
-		}
+		if (this._isLoading) return; // spinner is CSS, nothing to draw yet
 
 		// Draw history trails as tapered, fading line segments
 		for (const [, trail] of this._history) {
@@ -199,16 +199,20 @@ class MuniEngine {
 		}
 
 		// HUD
+		ctx.font = '12px Courier New';
 		ctx.textAlign = 'left';
 		ctx.fillStyle = 'rgba(255,255,255,0.25)';
-		ctx.font = '12px Courier New';
 		ctx.fillText('MUNI', 16, h - 32);
 		ctx.fillText(`${this._vehicles.length} vehicles`, 16, h - 16);
 
 		if (this._lastUpdated) {
-			const timeStr = this._lastUpdated.toLocaleTimeString();
 			ctx.textAlign = 'right';
-			ctx.fillText(`updated ${timeStr}`, w - 16, h - 16);
+			if (this._failCount > 0) {
+				ctx.fillStyle = 'rgba(255,100,100,0.6)';
+				ctx.fillText(`${this._failCount} failed`, w - 16, h - 32);
+				ctx.fillStyle = 'rgba(255,255,255,0.25)';
+			}
+			ctx.fillText(`updated ${this._lastUpdated.toLocaleTimeString()}`, w - 16, h - 16);
 		}
 	}
 }
