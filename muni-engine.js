@@ -29,6 +29,11 @@ const MUNI_CATEGORIES = [
 	{ id: 'bus',       label: 'BUS',   prefixes: null } // catch-all
 ];
 
+// Map overlay categories — separate from live vehicle categories
+const MUNI_OVERLAY_CATEGORIES = [
+	{ id: 'stops', label: 'STOPS' }
+];
+
 const MUNI_POLL_INTERVAL   = 15000; // ms — SFMTA source refreshes every ~30s
 const MUNI_HISTORY_MAX     = 20;    // snapshots retained per vehicle
 const MUNI_ZOOM_MIN        = 0.5;
@@ -75,6 +80,14 @@ class MuniEngine {
 		this._sortedRoutes = { lightrail: [], bus: [] };
 		this._hitTargets   = [];         // rebuilt each _drawPanel call
 
+		// Static map overlay data (fetched once on start)
+		this._stopPoints     = new Map();  // stopId -> { lat, lon, name, lines: Set<lineRef> }
+		this._lineShapes     = new Map();  // lineRef -> [[{lat,lon},...]] lazy cache, fetched on select
+		this._overlayVisible = { stops: true };
+
+		// Selected route — shows shape + highlighted stops
+		this._selectedRoute  = null;
+
 		// Bound handlers for clean removal
 		this._onWheel      = this._onWheel.bind(this);
 		this._onMouseDown  = this._onMouseDown.bind(this);
@@ -88,6 +101,7 @@ class MuniEngine {
 
 	start() {
 		this._bindEvents();
+		this._fetchStatic();
 		this._fetch();
 		this._interval = setInterval(() => this._fetch(), MUNI_POLL_INTERVAL);
 	}
@@ -396,6 +410,23 @@ class MuniEngine {
 		this._render();
 	}
 
+	_toggleOverlay(id) {
+		this._overlayVisible[id] = !this._overlayVisible[id];
+		this._render();
+	}
+
+	_selectRoute(lineRef) {
+		if (this._selectedRoute === lineRef) {
+			this._selectedRoute = null;
+			this._render();
+			return;
+		}
+		this._selectedRoute = lineRef;
+		this._render();
+		// Fetch pattern lazily on first selection
+		if (!this._lineShapes.has(lineRef)) this._fetchLinePattern(lineRef);
+	}
+
 	// ── Panel hit testing ─────────────────────────────────────────────────────
 
 	_handleClick(cx, cy) {
@@ -408,6 +439,72 @@ class MuniEngine {
 	}
 
 	// ── Data ──────────────────────────────────────────────────────────────────
+
+	async _fetchStatic() {
+		const apiKey = window.MUNI_LOCAL_KEY ?? MUNI_API_KEY;
+		if (apiKey === 'MUNI_API_KEY_PLACEHOLDER') return;
+		await this._fetchStops(apiKey);
+		this._render();
+	}
+
+	async _fetchStops(apiKey) {
+		try {
+			const url = `https://api.511.org/transit/stops?api_key=${apiKey}&operator_id=SF&format=json`;
+			const res = await fetch(url);
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			const data = await res.json();
+
+			const raw = data?.Contents?.dataObjects?.ScheduledStopPoint
+			         ?? data?.stopPoints
+			         ?? [];
+			for (const stop of raw) {
+				const id  = stop.id  ?? stop.Id;
+				const lat = parseFloat(stop.Location?.Latitude  ?? stop.lat ?? 0);
+				const lon = parseFloat(stop.Location?.Longitude ?? stop.lon ?? 0);
+				const name = stop.Name ?? stop.name ?? '';
+				if (!id || !lat || !lon) continue;
+				this._stopPoints.set(String(id), { lat, lon, name, lines: new Set() });
+			}
+		} catch (e) {
+			console.error('[MuniEngine] stops fetch failed:', e);
+		}
+	}
+
+	async _fetchLinePattern(lineRef) {
+		const apiKey = window.MUNI_LOCAL_KEY ?? MUNI_API_KEY;
+		if (apiKey === 'MUNI_API_KEY_PLACEHOLDER') return;
+		try {
+			const url = `https://api.511.org/transit/patterns?api_key=${apiKey}&operator_id=SF&line_id=${encodeURIComponent(lineRef)}&format=json`;
+			const res = await fetch(url);
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			const data = await res.json();
+
+			const patterns = data.journeyPatterns ?? data.JourneyPatterns ?? [];
+			const shapes = [];
+			for (const pattern of patterns) {
+				const rawSeq = pattern.PointsInSequence?.StopPointInJourneyPattern
+				            ?? pattern.pointsInSequence?.StopPointInJourneyPattern;
+				if (!rawSeq) continue;
+				const stopsInSeq = Array.isArray(rawSeq) ? rawSeq : [rawSeq];
+				const sorted = [...stopsInSeq].sort((a, b) =>
+					(a.Order ?? a.order ?? 0) - (b.Order ?? b.order ?? 0)
+				);
+				const coords = [];
+				for (const sp of sorted) {
+					const stopId = String(sp.ScheduledStopPointRef ?? sp.scheduledStopPointRef ?? '');
+					const stop   = this._stopPoints.get(stopId);
+					if (!stop) continue;
+					stop.lines.add(lineRef);
+					coords.push({ lat: stop.lat, lon: stop.lon, stopId });
+				}
+				if (coords.length >= 2) shapes.push(coords);
+			}
+			this._lineShapes.set(lineRef, shapes);
+			this._render();
+		} catch (e) {
+			console.error(`[MuniEngine] pattern fetch failed for ${lineRef}:`, e);
+		}
+	}
 
 	async _fetch() {
 		const apiKey = window.MUNI_LOCAL_KEY ?? MUNI_API_KEY;
@@ -519,6 +616,46 @@ class MuniEngine {
 		ctx.lineJoin = 'round';
 		ctx.lineCap  = 'round';
 
+		// ── Selected route shape (behind trails) ──
+		if (this._selectedRoute) {
+			const segments = this._lineShapes.get(this._selectedRoute) ?? [];
+			const color    = this._routeColor(this._selectedRoute);
+			ctx.strokeStyle = color;
+			ctx.lineWidth   = 2.5;
+			ctx.globalAlpha = 0.7;
+			for (const seg of segments) {
+				if (seg.length < 2) continue;
+				ctx.beginPath();
+				const p0 = this._project(seg[0].lat, seg[0].lon);
+				ctx.moveTo(p0.x, p0.y);
+				for (let i = 1; i < seg.length; i++) {
+					const p = this._project(seg[i].lat, seg[i].lon);
+					ctx.lineTo(p.x, p.y);
+				}
+				ctx.stroke();
+			}
+			ctx.globalAlpha = 1.0;
+		}
+
+		// ── Stop overlays ──
+		if (this._overlayVisible.stops && this._stopPoints.size > 0) {
+			const sel = this._selectedRoute;
+			for (const [, stop] of this._stopPoints) {
+				if (stop.lines.size > 0 && ![...stop.lines].some(l => this._isVisible(l))) continue;
+				const onSelected = sel && stop.lines.has(sel);
+				const { x, y } = this._project(stop.lat, stop.lon);
+				ctx.beginPath();
+				if (onSelected) {
+					ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+					ctx.fillStyle = this._routeColor(sel);
+				} else {
+					ctx.arc(x, y, 0.66, 0, Math.PI * 2);
+					ctx.fillStyle = 'rgba(255,255,255,0.5)';
+				}
+				ctx.fill();
+			}
+		}
+
 		for (const [, trail] of this._history) {
 			if (trail.length < 2) continue;
 			if (!this._isVisible(trail[trail.length - 1].line)) continue;
@@ -610,6 +747,14 @@ class MuniEngine {
 			scanY += 16;
 		}
 
+		// Overlay categories (STOPS, ROUTES) — simple rows, no expand
+		scanY += 6;
+		for (const cat of MUNI_OVERLAY_CATEGORIES) {
+			minX = Math.min(minX, lblX - ctx.measureText(cat.label).width);
+			lastContentBottom = scanY + 4;
+			scanY += MUNI_PANEL_CAT_H + 16;
+		}
+
 		// Backdrop — snug around content, symmetric top/bottom padding (8px)
 		const backdropL = minX - 10;
 		ctx.fillStyle = 'rgba(0,0,0,0.5)';
@@ -661,23 +806,33 @@ class MuniEngine {
 					const rowBot  = rowTop + MUNI_PANEL_ITEM_H;
 					if (rowBot <= clipTop || rowTop >= clipBot) continue;
 
-					const baseline = rowTop + MUNI_PANEL_ITEM_H - 5;
-					const lineRef  = routes[i];
-					const routeOn  = this._routeVisible.get(lineRef) !== false;
+					const baseline  = rowTop + MUNI_PANEL_ITEM_H - 5;
+					const lineRef   = routes[i];
+					const routeOn   = this._routeVisible.get(lineRef) !== false;
 					const effective = visible && routeOn;
-					const color    = this._routeColor(lineRef);
+					const selected  = this._selectedRoute === lineRef;
+					const color     = this._routeColor(lineRef);
 
+					// Dot — toggles visibility
 					ctx.fillStyle = effective ? color : color + '3a';
 					ctx.fillText(routeOn ? '●' : '○', dotX, baseline);
 
-					ctx.fillStyle = effective ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.25)';
+					// Label — highlighted when route is selected
+					ctx.fillStyle = selected  ? color
+					              : effective ? 'rgba(255,255,255,0.7)'
+					              :             'rgba(255,255,255,0.25)';
 					ctx.fillText(lineRef, lblX, baseline);
 
-					// Only register hit for fully visible rows
 					if (rowTop >= clipTop && rowBot <= clipBot) {
+						// Dot hit: toggle visibility
 						this._hitTargets.push({
-							x: w - 188, y: rowTop, w: 175, h: MUNI_PANEL_ITEM_H,
+							x: w - 28, y: rowTop, w: 20, h: MUNI_PANEL_ITEM_H,
 							action: () => this._toggleRoute(lineRef)
+						});
+						// Label hit: select/deselect route (show shape + stops)
+						this._hitTargets.push({
+							x: w - 160, y: rowTop, w: 130, h: MUNI_PANEL_ITEM_H,
+							action: () => this._selectRoute(lineRef)
 						});
 					}
 				}
@@ -697,6 +852,23 @@ class MuniEngine {
 			}
 
 			y += 16; // gap between categories
+		}
+
+		// ── Overlay categories (STOPS, ROUTES) — simple toggles, no expand ──
+		y += 6; // extra gap between vehicle and overlay groups
+		for (const cat of MUNI_OVERLAY_CATEGORIES) {
+			const visible = this._overlayVisible[cat.id];
+
+			ctx.fillStyle = visible ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.3)';
+			ctx.fillText(visible ? '●' : '○', dotX, y);
+
+			ctx.fillStyle = visible ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.25)';
+			ctx.fillText(cat.label, lblX, y);
+
+			this._hitTargets.push({ x: w - 185, y: y - 14, w: 171, h: 18,
+				action: () => this._toggleOverlay(cat.id) });
+
+			y += MUNI_PANEL_CAT_H + 16;
 		}
 	}
 }
