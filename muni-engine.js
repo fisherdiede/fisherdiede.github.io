@@ -766,6 +766,18 @@ class MuniEngine {
 		return { x, y };
 	}
 
+	_drawHeart(ctx, cx, cy, r) {
+		ctx.beginPath();
+		ctx.moveTo(cx, cy + r * 0.9);
+		ctx.bezierCurveTo(cx - r * 1.0, cy + r * 0.4, cx - r * 1.0, cy - r * 0.8, cx, cy - r * 0.2);
+		ctx.bezierCurveTo(cx + r * 1.0, cy - r * 0.8, cx + r * 1.0, cy + r * 0.4, cx, cy + r * 0.9);
+		ctx.closePath();
+	}
+
+	_isHeartStop(name) {
+		return name && /28th/i.test(name) && /church/i.test(name);
+	}
+
 	_animatedPos(v) {
 		if (!v.animStart) return { lat: v.lat, lon: v.lon };
 		const duration = v.animDuration ?? this._avgFetchInterval;
@@ -1088,13 +1100,13 @@ class MuniEngine {
 				if (stop.lines.size > 0 && ![...stop.lines].some(l => this._isVisible(l))) continue;
 				const onSelected = sel && stop.lines.has(sel);
 				const { x, y } = this._project(stop.lat, stop.lon);
-				ctx.beginPath();
-				if (onSelected) {
-					ctx.arc(x, y, 0.66, 0, Math.PI * 2);
-					ctx.fillStyle = this._routeColor(sel);
+				if (this._isHeartStop(stop.name) && stop.lines.has('J')) {
+					this._drawHeart(ctx, x, y, 0.95);
+					ctx.fillStyle = onSelected ? this._routeColor(sel) : 'rgba(255,255,255,0.5)';
 				} else {
+					ctx.beginPath();
 					ctx.arc(x, y, 0.66, 0, Math.PI * 2);
-					ctx.fillStyle = 'rgba(255,255,255,0.5)';
+					ctx.fillStyle = onSelected ? this._routeColor(sel) : 'rgba(255,255,255,0.5)';
 				}
 				ctx.fill();
 			}
