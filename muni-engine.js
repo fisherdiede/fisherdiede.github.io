@@ -62,8 +62,18 @@ class MuniEngine {
 		this._worldW = canvas.width;
 		this._worldH = canvas.height;
 
-		// View transform: translate then scale
-		this._view = { scale: 1, x: 0, y: 0 };
+		// Precompute uniform projection scale (xscale = yscale, with cos-lat correction)
+		const _cosLat = Math.cos((MUNI_SF_BOUNDS.minLat + MUNI_SF_BOUNDS.maxLat) / 2 * Math.PI / 180);
+		this._projScale  = Math.min(
+			this._worldW / ((MUNI_SF_BOUNDS.maxLon - MUNI_SF_BOUNDS.minLon) * _cosLat),
+			this._worldH /  (MUNI_SF_BOUNDS.maxLat - MUNI_SF_BOUNDS.minLat)
+		);
+		this._projCosLat = _cosLat;
+
+		// View transform: translate then scale — center map content on load
+		const _mapW = (MUNI_SF_BOUNDS.maxLon - MUNI_SF_BOUNDS.minLon) * _cosLat * this._projScale;
+		const _mapH = (MUNI_SF_BOUNDS.maxLat - MUNI_SF_BOUNDS.minLat) * this._projScale;
+		this._view = { scale: 1, x: (this._worldW - _mapW) / 2, y: (this._worldH - _mapH) / 2 };
 
 		// Drag/pinch interaction state
 		this._drag       = null;  // { startX, startY, startViewX, startViewY }
@@ -645,9 +655,8 @@ class MuniEngine {
 	// ── Projection ────────────────────────────────────────────────────────────
 
 	_project(lat, lon) {
-		const { minLat, maxLat, minLon, maxLon } = MUNI_SF_BOUNDS;
-		const x = ((lon - minLon) / (maxLon - minLon)) * this._worldW;
-		const y = (1 - (lat - minLat) / (maxLat - minLat)) * this._worldH;
+		const x = (lon - MUNI_SF_BOUNDS.minLon) * this._projCosLat * this._projScale;
+		const y = (MUNI_SF_BOUNDS.maxLat - lat) * this._projScale;
 		return { x, y };
 	}
 
