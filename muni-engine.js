@@ -82,6 +82,15 @@ class MuniEngine {
 		this._hasDragged = false; // true once pointer moves > 4px
 		this._touchMoved = false;
 
+		// Animated view transition (e.g. fit-to-route)
+		this._viewAnim = null; // { from: {scale,x,y}, to: {scale,x,y}, startTime, duration }
+
+		// Route strip panel state
+		this._stripHitTargets    = [];
+		this._routeStripScrollY  = 0;
+		this._stripPanelScroll   = null;
+		this._stripScrollArea    = null;
+
 		// Panel scroll state
 		this._catScrollY      = { lightrail: 0, bus: 0 };
 		this._catListH        = { lightrail: 0, bus: 0 }; // actual clip height — set each render
@@ -97,7 +106,8 @@ class MuniEngine {
 		this._hitTargets   = [];         // rebuilt each _drawPanel call
 
 		// Static map overlay data (fetched once on start)
-		this._stopPoints     = new Map();  // stopId -> { lat, lon, name, lines: Set<lineRef> }
+		this._stopPoints        = new Map();  // stopId -> { lat, lon, name, lines: Set<lineRef> }
+		this._routeDestinations = new Map();  // `${lineRef}:${direction}` -> headsign string
 		this._lineShapes     = new Map();  // lineRef -> [[{lat,lon},...]] lazy cache, fetched on select
 		this._overlayVisible = { stops: true };
 
@@ -137,6 +147,14 @@ class MuniEngine {
 
 	_animLoop() {
 		this._advancePending();
+		if (this._viewAnim) {
+			const t = Math.min(1, (Date.now() - this._viewAnim.startTime) / this._viewAnim.duration);
+			const e = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; // ease in-out quad
+			this._view.scale = this._viewAnim.from.scale + (this._viewAnim.to.scale - this._viewAnim.from.scale) * e;
+			this._view.x     = this._viewAnim.from.x     + (this._viewAnim.to.x     - this._viewAnim.from.x) * e;
+			this._view.y     = this._viewAnim.from.y     + (this._viewAnim.to.y     - this._viewAnim.from.y) * e;
+			if (t >= 1) this._viewAnim = null;
+		}
 		this._render();
 		this._rafId = requestAnimationFrame(this._animLoop);
 	}
@@ -226,18 +244,28 @@ class MuniEngine {
 	_onWheel(e) {
 		e.preventDefault();
 		const { x, y } = this._clientToCanvas(e.clientX, e.clientY);
+		if (this._inStripScrollArea(x, y)) {
+			this._scrollStrip(e.deltaY * 0.4);
+			return;
+		}
 		const area = this._inPanelRouteArea(x, y);
 		if (area) {
 			this._scrollCat(area.catId, e.deltaY * 0.4);
 		} else {
+			this._viewAnim = null;
 			this._applyZoom(x, y, e.deltaY < 0 ? 1.02 : 0.98);
 			this._render();
 		}
 	}
 
 	_onMouseDown(e) {
+		this._viewAnim = null;
 		this._hasDragged = false;
 		const { x, y } = this._clientToCanvas(e.clientX, e.clientY);
+		if (this._inStripScrollArea(x, y)) {
+			this._stripPanelScroll = { startCanvasY: y, startScrollY: this._routeStripScrollY };
+			return;
+		}
 		const area = this._inPanelRouteArea(x, y);
 		if (area) {
 			this._panelScroll = { catId: area.catId, startCanvasY: y, startScrollY: this._catScrollY[area.catId] };
@@ -249,6 +277,13 @@ class MuniEngine {
 
 	_onMouseMove(e) {
 		const { x, y } = this._clientToCanvas(e.clientX, e.clientY);
+
+		if (this._stripPanelScroll) {
+			const dy = y - this._stripPanelScroll.startCanvasY;
+			if (!this._hasDragged && Math.abs(dy) > 4) this._hasDragged = true;
+			this._scrollStripTo(this._stripPanelScroll.startScrollY - dy);
+			return;
+		}
 
 		if (this._panelScroll) {
 			const dy = y - this._panelScroll.startCanvasY;
@@ -267,6 +302,15 @@ class MuniEngine {
 	}
 
 	_onMouseUp(e) {
+		if (this._stripPanelScroll) {
+			if (!this._hasDragged) {
+				const { x, y } = this._clientToCanvas(e.clientX, e.clientY);
+				this._handleClick(x, y);
+			}
+			this._stripPanelScroll = null;
+			this._hasDragged = false;
+			return;
+		}
 		if (this._panelScroll) {
 			if (!this._hasDragged) {
 				const { x, y } = this._clientToCanvas(e.clientX, e.clientY);
@@ -289,6 +333,7 @@ class MuniEngine {
 
 	_onTouchStart(e) {
 		e.preventDefault();
+		this._viewAnim = null;
 		if (e.touches.length === 2) {
 			this._drag        = null;
 			this._panelScroll = null;
@@ -308,11 +353,15 @@ class MuniEngine {
 			this._pinch      = null;
 			this._touchMoved = false;
 			const { x, y }  = this._clientToCanvas(e.touches[0].clientX, e.touches[0].clientY);
-			const area = this._inPanelRouteArea(x, y);
-			if (area) {
-				this._panelScroll = { catId: area.catId, startCanvasY: y, startScrollY: this._catScrollY[area.catId] };
+			if (this._inStripScrollArea(x, y)) {
+				this._stripPanelScroll = { startCanvasY: y, startScrollY: this._routeStripScrollY };
 			} else {
-				this._drag = { startX: x, startY: y, startViewX: this._view.x, startViewY: this._view.y };
+				const area = this._inPanelRouteArea(x, y);
+				if (area) {
+					this._panelScroll = { catId: area.catId, startCanvasY: y, startScrollY: this._catScrollY[area.catId] };
+				} else {
+					this._drag = { startX: x, startY: y, startViewX: this._view.x, startViewY: this._view.y };
+				}
 			}
 		}
 	}
@@ -335,6 +384,12 @@ class MuniEngine {
 			this._render();
 		} else if (e.touches.length === 1) {
 			const { x, y } = this._clientToCanvas(e.touches[0].clientX, e.touches[0].clientY);
+			if (this._stripPanelScroll) {
+				const dy = y - this._stripPanelScroll.startCanvasY;
+				if (!this._touchMoved && Math.abs(dy) > 4) this._touchMoved = true;
+				this._scrollStripTo(this._stripPanelScroll.startScrollY - dy);
+				return;
+			}
 			if (this._panelScroll) {
 				const dy = y - this._panelScroll.startCanvasY;
 				if (!this._touchMoved && Math.abs(dy) > 4) this._touchMoved = true;
@@ -354,6 +409,16 @@ class MuniEngine {
 
 	_onTouchEnd(e) {
 		if (e.touches.length === 0) {
+			if (this._stripPanelScroll) {
+				if (!this._touchMoved) {
+					const t = e.changedTouches[0];
+					const { x, y } = this._clientToCanvas(t.clientX, t.clientY);
+					this._handleClick(x, y);
+				}
+				this._stripPanelScroll = null;
+				this._touchMoved       = false;
+				return;
+			}
 			if (this._panelScroll) {
 				if (!this._touchMoved) {
 					const t = e.changedTouches[0];
@@ -373,6 +438,7 @@ class MuniEngine {
 			this._pinch      = null;
 			this._touchMoved = false;
 		} else if (e.touches.length === 1) {
+			this._stripPanelScroll = null;
 			this._panelScroll = null;
 			this._pinch       = null;
 			this._touchMoved  = false;
@@ -398,6 +464,24 @@ class MuniEngine {
 	_scrollCatTo(catId, value) {
 		this._catScrollY[catId] = Math.max(0, Math.min(this._catListMaxScroll(catId), value));
 		this._render();
+	}
+
+	_scrollStrip(delta) {
+		if (!this._stripScrollArea) return;
+		this._routeStripScrollY = Math.max(0, Math.min(this._stripScrollArea.maxScroll, this._routeStripScrollY + delta));
+		this._render();
+	}
+
+	_scrollStripTo(value) {
+		if (!this._stripScrollArea) return;
+		this._routeStripScrollY = Math.max(0, Math.min(this._stripScrollArea.maxScroll, value));
+		this._render();
+	}
+
+	_inStripScrollArea(x, y) {
+		const a = this._stripScrollArea;
+		if (!a) return false;
+		return x >= a.x && x <= a.x + a.w && y >= a.y && y <= a.y + a.h;
 	}
 
 	// ── Route visibility ──────────────────────────────────────────────────────
@@ -464,15 +548,26 @@ class MuniEngine {
 			this._render();
 			return;
 		}
-		this._selectedRoute = lineRef;
+		this._selectedRoute      = lineRef;
+		this._routeStripScrollY  = 0;
+		this._stripScrollArea    = null;
+		if (this._lineShapes.has(lineRef)) {
+			this._fitToRoute(lineRef);
+		} else {
+			this._fetchLinePattern(lineRef); // _fitToRoute called after load
+		}
 		this._render();
-		// Fetch pattern lazily on first selection
-		if (!this._lineShapes.has(lineRef)) this._fetchLinePattern(lineRef);
 	}
 
 	// ── Panel hit testing ─────────────────────────────────────────────────────
 
 	_handleClick(cx, cy) {
+		for (const t of this._stripHitTargets) {
+			if (cx >= t.x && cx <= t.x + t.w && cy >= t.y && cy <= t.y + t.h) {
+				t.action();
+				return;
+			}
+		}
 		for (const t of this._hitTargets) {
 			if (cx >= t.x && cx <= t.x + t.w && cy >= t.y && cy <= t.y + t.h) {
 				t.action();
@@ -544,6 +639,7 @@ class MuniEngine {
 			}
 			this._lineShapes.set(lineRef, shapes);
 			this._render();
+			if (this._selectedRoute === lineRef) this._fitToRoute(lineRef);
 		} catch (e) {
 			console.error(`[MuniEngine] pattern fetch failed for ${lineRef}:`, e);
 		}
@@ -579,6 +675,15 @@ class MuniEngine {
 			}
 			this._lastFetchTime = now;
 
+			// Capture headsigns for route strip destination labels
+			for (const a of activities) {
+				const j = a?.MonitoredVehicleJourney;
+				if (!j?.LineRef || !j?.DirectionRef) continue;
+				const raw  = j.DestinationName;
+				const name = ((typeof raw === 'object' ? raw?.value : raw) ?? '').toString().trim().toUpperCase();
+				if (name) this._routeDestinations.set(`${j.LineRef}:${j.DirectionRef}`, name);
+			}
+
 			this._vehicles = activities
 				.map(a => a?.MonitoredVehicleJourney)
 				.filter(j => j?.VehicleLocation?.Latitude && j?.VehicleLocation?.Longitude)
@@ -586,7 +691,7 @@ class MuniEngine {
 					const lat  = parseFloat(j.VehicleLocation.Latitude);
 					const lon  = parseFloat(j.VehicleLocation.Longitude);
 					const prev = j.VehicleRef ? prevById.get(j.VehicleRef) : null;
-					const base = { ref: j.VehicleRef ?? null, lat, lon, line: j.LineRef || 'OOS' };
+					const base = { ref: j.VehicleRef ?? null, lat, lon, line: j.LineRef || 'OOS', direction: j.DirectionRef ?? null };
 
 					if (!prev) {
 						// New vehicle — appear immediately at reported position
@@ -677,6 +782,255 @@ class MuniEngine {
 		return MUNI_ROUTE_COLORS[prefix] ?? MUNI_ROUTE_COLORS['default'];
 	}
 
+	_animateToView(target, duration = 700) {
+		this._viewAnim = { from: { ...this._view }, to: target, startTime: Date.now(), duration };
+	}
+
+	_getRouteStats(lineRef) {
+		const rv = this._vehicles.filter(v => v.line === lineRef);
+		return {
+			total:    rv.length,
+			inbound:  rv.filter(v => v.direction === 'IB').length,
+			outbound: rv.filter(v => v.direction === 'OB').length
+		};
+	}
+
+	_computeRouteBounds(lineRef) {
+		const segments = this._lineShapes.get(lineRef);
+		if (!segments || segments.length === 0) return null;
+		let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+		for (const seg of segments)
+			for (const pt of seg) {
+				const { x, y } = this._project(pt.lat, pt.lon);
+				if (x < minX) minX = x; if (x > maxX) maxX = x;
+				if (y < minY) minY = y; if (y > maxY) maxY = y;
+			}
+		return isFinite(minX) ? { minX, minY, maxX, maxY } : null;
+	}
+
+	_fitToRoute(lineRef) {
+		const bounds = this._computeRouteBounds(lineRef);
+		if (!bounds) return;
+		const w = this.canvas.width, h = this.canvas.height, pad = 80;
+		const worldW = bounds.maxX - bounds.minX, worldH = bounds.maxY - bounds.minY;
+		if (worldW < 1 || worldH < 1) return;
+		const scale = Math.max(MUNI_ZOOM_MIN, Math.min(MUNI_ZOOM_MAX,
+			Math.min((w - 2 * pad) / worldW, (h - 2 * pad) / worldH)));
+		const cx = (bounds.minX + bounds.maxX) / 2, cy = (bounds.minY + bounds.maxY) / 2;
+		this._animateToView({ scale, x: w / 2 - cx * scale, y: h / 2 - cy * scale });
+	}
+
+	_computeShapeTs(shape) {
+		if (!shape || shape.length === 0) return [];
+		if (shape.length === 1) return [{ stopId: shape[0].stopId, t: 0 }];
+		let totalLen = 0;
+		const cumDists = [0];
+		for (let i = 1; i < shape.length; i++) {
+			const p0 = this._project(shape[i - 1].lat, shape[i - 1].lon);
+			const p1 = this._project(shape[i].lat, shape[i].lon);
+			totalLen += Math.hypot(p1.x - p0.x, p1.y - p0.y);
+			cumDists.push(totalLen);
+		}
+		if (totalLen === 0) return shape.map((pt, i) => ({ stopId: pt.stopId, t: i / (shape.length - 1) }));
+		return shape.map((pt, i) => ({ stopId: pt.stopId, t: cumDists[i] / totalLen }));
+	}
+
+	_projectOntoShape(lat, lon, shape) {
+		if (!shape || shape.length < 2) return 0.5;
+		let totalLen = 0;
+		const segs = [];
+		for (let i = 1; i < shape.length; i++) {
+			const p0 = this._project(shape[i - 1].lat, shape[i - 1].lon);
+			const p1 = this._project(shape[i].lat, shape[i].lon);
+			const dx = p1.x - p0.x, dy = p1.y - p0.y;
+			const len = Math.hypot(dx, dy);
+			segs.push({ p0, dx, dy, len, start: totalLen });
+			totalLen += len;
+		}
+		if (totalLen === 0) return 0.5;
+		const pv = this._project(lat, lon);
+		let bestParam = 0, bestDist = Infinity;
+		for (const s of segs) {
+			if (s.len === 0) continue;
+			const t  = Math.max(0, Math.min(1, ((pv.x - s.p0.x) * s.dx + (pv.y - s.p0.y) * s.dy) / (s.len * s.len)));
+			const cx = s.p0.x + t * s.dx, cy = s.p0.y + t * s.dy;
+			const dist = Math.hypot(pv.x - cx, pv.y - cy);
+			if (dist < bestDist) { bestDist = dist; bestParam = (s.start + t * s.len) / totalLen; }
+		}
+		return bestParam;
+	}
+
+	_drawRouteStrip(ctx, lineRef) {
+		const color  = this._routeColor(lineRef);
+		const shapes = this._lineShapes.get(lineRef) ?? [];
+		const canon  = shapes.length > 0 ? shapes.reduce((a, b) => b.length > a.length ? b : a) : null;
+
+		// Terminal destination labels — used for first/last stop in the list
+		const ibDest = (this._routeDestinations.get(`${lineRef}:IB`)
+			?? this._stopPoints.get(canon?.[0]?.stopId)?.name
+			?? 'INBOUND').toUpperCase();
+		const obDest = (this._routeDestinations.get(`${lineRef}:OB`)
+			?? this._stopPoints.get(canon?.[canon?.length - 1]?.stopId)?.name
+			?? 'OUTBOUND').toUpperCase();
+		this._stripHitTargets = [];
+		const panelLeft = 8;
+
+		// ── Expanded view ─────────────────────────────────────────────────────────
+		const outerPad  = 18;
+		const headerH   = 56;
+		const footerH   = 8;
+
+		const stopTs   = canon ? this._computeShapeTs(canon) : [];
+		const numSegs  = Math.max(1, stopTs.length - 1);
+		const availH   = this.canvas.height - 16 - headerH - footerH;
+		const rowH         = 18;
+		const nameFontSz   = Math.max(8, Math.min(12, rowH - 4));
+		const isScrollMode = rowH * numSegs > availH;
+
+		// Measure all names first to derive panel width
+		let maxNameW = 0;
+		ctx.font = `${nameFontSz}px Courier New`;
+		for (const { stopId } of stopTs) {
+			const name = this._stopPoints.get(stopId)?.name ?? '';
+			if (name) maxNameW = Math.max(maxNameW, ctx.measureText(name).width);
+		}
+		maxNameW = Math.max(maxNameW, ctx.measureText(ibDest).width, ctx.measureText(obDest).width);
+		ctx.font = 'bold 18px Courier New';
+		maxNameW = Math.max(maxNameW, ctx.measureText(lineRef).width);
+
+		const panelW   = Math.max(160, Math.min(400, Math.ceil(maxNameW) + outerPad * 2 + 8));
+		const xIB      = panelLeft + outerPad;
+		const xOB      = panelLeft + panelW - outerPad;
+		const xCenter  = panelLeft + panelW / 2;
+		const stripH   = rowH * numSegs;
+		const viewH    = isScrollMode ? availH : stripH;
+		const stripTop = 8 + headerH;
+		const panelH   = headerH + viewH + footerH;
+
+		if (isScrollMode) {
+			const maxScroll = Math.max(0, stripH - viewH + 22);
+			this._routeStripScrollY = Math.max(0, Math.min(maxScroll, this._routeStripScrollY));
+			this._stripScrollArea = { x: panelLeft, y: stripTop, w: panelW, h: viewH, maxScroll };
+		} else {
+			this._stripScrollArea = null;
+			this._routeStripScrollY = 0;
+		}
+
+		ctx.fillStyle = 'rgba(0,0,0,0.6)';
+		ctx.fillRect(panelLeft, 8, panelW, panelH);
+
+		const textColor = '#fff';
+
+		// Route name + vehicle count
+		const stats = this._getRouteStats(lineRef);
+		ctx.textAlign = 'center';
+		ctx.font = 'bold 18px Courier New';
+		ctx.fillStyle = color;
+		ctx.fillText(lineRef, xCenter, 26);
+		ctx.font = '11px Courier New';
+		ctx.fillStyle = 'rgba(255,255,255,0.55)';
+		ctx.fillText(`${stats.total} vehicles online`, xCenter, 42);
+
+		// ── Clipped strip content ──
+		ctx.save();
+		if (isScrollMode) {
+			ctx.beginPath();
+			ctx.rect(panelLeft, stripTop, panelW, viewH);
+			ctx.clip();
+			ctx.translate(0, 8 - this._routeStripScrollY);
+		}
+
+		// Vertical track lines
+		ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+		ctx.lineWidth = 1;
+		ctx.beginPath(); ctx.moveTo(xIB, stripTop); ctx.lineTo(xIB, stripTop + stripH); ctx.stroke();
+		ctx.beginPath(); ctx.moveTo(xOB, stripTop); ctx.lineTo(xOB, stripTop + stripH); ctx.stroke();
+
+		// Stop ticks and names
+		const showNames = rowH >= 9;
+		if (showNames) ctx.font = `${nameFontSz}px Courier New`;
+
+		for (let si = 0; si < stopTs.length; si++) {
+			const { stopId } = stopTs[si];
+			const sy = stripTop + (si / numSegs) * stripH;
+			ctx.fillStyle = 'rgba(255,255,255,0.4)';
+			ctx.beginPath();
+			ctx.moveTo(xIB,     sy - 3);
+			ctx.lineTo(xIB - 3, sy + 2);
+			ctx.lineTo(xIB + 3, sy + 2);
+			ctx.closePath();
+			ctx.fill();
+			ctx.beginPath();
+			ctx.moveTo(xOB,     sy + 3);
+			ctx.lineTo(xOB - 3, sy - 2);
+			ctx.lineTo(xOB + 3, sy - 2);
+			ctx.closePath();
+			ctx.fill();
+			if (showNames) {
+				const name = si === 0 ? ibDest
+				           : si === numSegs ? obDest
+				           : (this._stopPoints.get(stopId)?.name ?? '');
+				if (name) {
+					ctx.textAlign = 'center';
+					ctx.fillStyle = (si === 0 || si === numSegs) ? '#fff' : textColor;
+					ctx.fillText(name, xCenter, sy + nameFontSz * 0.35);
+				}
+			}
+		}
+
+		if (!canon) {
+			ctx.font = '10px Courier New';
+			ctx.textAlign = 'center';
+			ctx.fillStyle = textColor;
+			ctx.fillText('loading…', xCenter, stripTop + 14);
+		}
+
+		// Vehicle markers projected onto the canonical shape
+		if (canon) {
+			for (const v of this._vehicles) {
+				if (v.line !== lineRef) continue;
+				const pos = this._animatedPos(v);
+				const dt  = this._projectOntoShape(pos.lat, pos.lon, canon);
+				let ut = dt;
+				if (stopTs.length >= 2) {
+					for (let i = 1; i < stopTs.length; i++) {
+						if (dt <= stopTs[i].t || i === stopTs.length - 1) {
+							const s0 = stopTs[i - 1].t, s1 = stopTs[i].t;
+							const frac = s1 > s0 ? Math.max(0, Math.min(1, (dt - s0) / (s1 - s0))) : 0;
+							ut = (i - 1 + frac) / numSegs;
+							break;
+						}
+					}
+				}
+				const vy  = stripTop + ut * stripH;
+				const vx  = v.direction === 'IB' ? xOB : xIB;
+				const grad = ctx.createRadialGradient(vx, vy, 0, vx, vy, 4);
+				grad.addColorStop(0, color);
+				grad.addColorStop(0.25, color);
+				grad.addColorStop(1, color + '00');
+				ctx.beginPath();
+				ctx.arc(vx, vy, 6, 0, Math.PI * 2);
+				ctx.fillStyle = grad;
+				ctx.fill();
+				ctx.beginPath();
+				ctx.arc(vx, vy, 1, 0, Math.PI * 2);
+				ctx.fillStyle = color;
+				ctx.fill();
+			}
+		}
+
+		ctx.restore(); // end clip
+
+		// Scroll indicator bar
+		if (isScrollMode) {
+			const barTrackH = viewH - 4;
+			const barH = Math.max(20, (viewH / stripH) * barTrackH);
+			const barY = stripTop + 2 + (this._routeStripScrollY / this._stripScrollArea.maxScroll) * (barTrackH - barH);
+			ctx.fillStyle = 'rgba(255,255,255,0.3)';
+			ctx.fillRect(panelLeft + panelW - 4, barY, 3, barH);
+		}
+	}
+
 	// ── Render ────────────────────────────────────────────────────────────────
 
 	_render() {
@@ -711,7 +1065,7 @@ class MuniEngine {
 			const segments = this._lineShapes.get(this._selectedRoute) ?? [];
 			const color    = this._routeColor(this._selectedRoute);
 			ctx.strokeStyle = color;
-			ctx.lineWidth   = 2.5;
+			ctx.lineWidth   = 0.25;
 			ctx.globalAlpha = 0.7;
 			for (const seg of segments) {
 				if (seg.length < 2) continue;
@@ -736,7 +1090,7 @@ class MuniEngine {
 				const { x, y } = this._project(stop.lat, stop.lon);
 				ctx.beginPath();
 				if (onSelected) {
-					ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+					ctx.arc(x, y, 0.66, 0, Math.PI * 2);
 					ctx.fillStyle = this._routeColor(sel);
 				} else {
 					ctx.arc(x, y, 0.66, 0, Math.PI * 2);
@@ -786,32 +1140,38 @@ class MuniEngine {
 			const pos = this._animatedPos(v);
 			const { x, y } = this._project(pos.lat, pos.lon);
 			const color = this._routeColor(v.line);
-			const grad = ctx.createRadialGradient(x, y, 0, x, y, 6);
+			const grad = ctx.createRadialGradient(x, y, 0, x, y, 4);
 			grad.addColorStop(0, color);
+			grad.addColorStop(0.25, color);
 			grad.addColorStop(1, color + '00');
 			ctx.beginPath();
 			ctx.arc(x, y, 6, 0, Math.PI * 2);
 			ctx.fillStyle = grad;
 			ctx.fill();
+			ctx.beginPath();
+			ctx.arc(x, y, 1, 0, Math.PI * 2);
+			ctx.fillStyle = color;
+			ctx.fill();
 		}
 
 		ctx.restore(); // ── End world-space transform ──
 
-		// ── HUD — fixed screen-space corners ──
-		ctx.font = '14px Courier New';
-		ctx.textAlign = 'left';
-		ctx.fillStyle = 'rgba(255,255,255,0.55)';
-		ctx.fillText('MUNI', 16, h - 32);
-		ctx.fillText(`${this._vehicles.length} active vehicles`, 16, h - 16);
+		// ── Route strip panel — top-left, shown when route selected ──
+		if (this._selectedRoute) this._drawRouteStrip(ctx, this._selectedRoute);
 
+		// ── HUD — bottom-right ──
+		ctx.font = '14px Courier New';
+		ctx.textAlign = 'right';
+		ctx.fillStyle = 'rgba(255,255,255,0.55)';
+		ctx.fillText('MUNI', w - 16, h - 48);
+		ctx.fillText(`${this._vehicles.length} vehicles online`, w - 16, h - 32);
 		if (this._lastUpdated) {
-			ctx.textAlign = 'right';
 			if (this._failCount > 0) {
 				ctx.fillStyle = 'rgba(255,100,100,0.8)';
-				ctx.fillText(`${this._failCount} failed`, w - 16, h - 32);
-				ctx.fillStyle = 'rgba(255,255,255,0.55)';
+				ctx.fillText(`${this._failCount} failed`, w - 16, h - 16);
+			} else {
+				ctx.fillText(`updated ${this._lastUpdated.toLocaleTimeString()}`, w - 16, h - 16);
 			}
-			ctx.fillText(`updated ${this._lastUpdated.toLocaleTimeString()}`, w - 16, h - 16);
 		}
 
 		// ── Route visibility panel (top-right) ──
