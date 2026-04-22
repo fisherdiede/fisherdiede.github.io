@@ -32,7 +32,7 @@ jobs:
       - name: Inject MUNI API key
         env:
           MUNI_API_KEY: ${{ secrets.MUNI_API_KEY }}
-        run: sed -i "s|MUNI_API_KEY_PLACEHOLDER|${MUNI_API_KEY}|g" muni-engine.js
+        run: sed -i "s|MUNI_API_KEY = 'MUNI_API_KEY_PLACEHOLDER'|MUNI_API_KEY = '${MUNI_API_KEY}'|" muni-engine.js
 
       - name: Build with Jekyll
         run: bundle exec jekyll build
