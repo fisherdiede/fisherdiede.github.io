@@ -77,10 +77,9 @@ class MuniEngine {
 		this._view = { scale: _fillScale, x: (this._worldW - _mapW * _fillScale) / 2, y: (this._worldH - _mapH * _fillScale) / 2 };
 
 		// Drag/pinch interaction state
-		this._drag       = null;  // { startX, startY, startViewX, startViewY }
-		this._pinch      = null;  // { startDist, startScale, startMidX, startMidY, startViewX, startViewY }
-		this._hasDragged = false; // true once pointer moves > 4px
-		this._touchMoved = false;
+		this._drag     = null;  // { startX, startY, startViewX, startViewY }
+		this._pinch    = null;  // { startDist, startScale, startMidX, startMidY, startViewX, startViewY }
+		this._hasMoved = false; // true once pointer moves > 4px (shared across mouse and touch)
 
 		// Animated view transition (e.g. fit-to-route)
 		this._viewAnim = null; // { from: {scale,x,y}, to: {scale,x,y}, startTime, duration }
@@ -108,7 +107,8 @@ class MuniEngine {
 		// Static map overlay data (fetched once on start)
 		this._stopPoints        = new Map();  // stopId -> { lat, lon, name, lines: Set<lineRef> }
 		this._routeDestinations = new Map();  // `${lineRef}:${direction}` -> headsign string
-		this._lineShapes     = new Map();  // lineRef -> [[{lat,lon},...]] lazy cache, fetched on select
+		this._lineShapes   = new Map();  // lineRef -> [[{lat,lon},...]] lazy cache, fetched on select
+		this._lineShapeTs  = new Map();  // lineRef -> precomputed cumulative-t array for canonical shape
 		this._overlayVisible = { stops: true };
 
 		// Selected route — shows shape + highlighted stops
@@ -124,6 +124,9 @@ class MuniEngine {
 		this._onTouchEnd   = this._onTouchEnd.bind(this);
 		this._onResize     = this._onResize.bind(this);
 		this._animLoop     = this._animLoop.bind(this);
+
+		this._animCache = null; // per-frame cache for _animatedPos, reset each render
+		this._spinner   = document.getElementById('muni-spinner');
 	}
 
 	start() {
@@ -143,6 +146,11 @@ class MuniEngine {
 			this._abortController = null;
 		}
 		this._unbindEvents();
+	}
+
+	get _apiKey() {
+		const key = window.MUNI_LOCAL_KEY ?? MUNI_API_KEY;
+		return key === 'MUNI_API_KEY_PLACEHOLDER' ? null : key;
 	}
 
 	_animLoop() {
@@ -235,8 +243,7 @@ class MuniEngine {
 	}
 
 	_inPanelRouteArea(x, y) {
-		return this._panelRouteAreas.find(a =>
-			x >= a.x && x <= a.x + a.w && y >= a.y && y <= a.y + a.h) ?? null;
+		return this._panelRouteAreas.find(a => this._pointInBounds(x, y, a)) ?? null;
 	}
 
 	// ── Mouse handlers ────────────────────────────────────────────────────────
@@ -260,7 +267,7 @@ class MuniEngine {
 
 	_onMouseDown(e) {
 		this._viewAnim = null;
-		this._hasDragged = false;
+		this._hasMoved = false;
 		const { x, y } = this._clientToCanvas(e.clientX, e.clientY);
 		if (this._inStripScrollArea(x, y)) {
 			this._stripPanelScroll = { startCanvasY: y, startScrollY: this._routeStripScrollY };
@@ -280,14 +287,14 @@ class MuniEngine {
 
 		if (this._stripPanelScroll) {
 			const dy = y - this._stripPanelScroll.startCanvasY;
-			if (!this._hasDragged && Math.abs(dy) > 4) this._hasDragged = true;
+			if (!this._hasMoved && Math.abs(dy) > 4) this._hasMoved = true;
 			this._scrollStripTo(this._stripPanelScroll.startScrollY - dy);
 			return;
 		}
 
 		if (this._panelScroll) {
 			const dy = y - this._panelScroll.startCanvasY;
-			if (!this._hasDragged && Math.abs(dy) > 4) this._hasDragged = true;
+			if (!this._hasMoved && Math.abs(dy) > 4) this._hasMoved = true;
 			this._scrollCatTo(this._panelScroll.catId, this._panelScroll.startScrollY - dy);
 			return;
 		}
@@ -295,7 +302,7 @@ class MuniEngine {
 		if (!this._drag) return;
 		const dx = x - this._drag.startX;
 		const dy = y - this._drag.startY;
-		if (!this._hasDragged && (dx * dx + dy * dy > 16)) this._hasDragged = true;
+		if (!this._hasMoved && (dx * dx + dy * dy > 16)) this._hasMoved = true;
 		this._view.x = this._drag.startViewX + dx;
 		this._view.y = this._drag.startViewY + dy;
 		this._render();
@@ -303,29 +310,29 @@ class MuniEngine {
 
 	_onMouseUp(e) {
 		if (this._stripPanelScroll) {
-			if (!this._hasDragged) {
+			if (!this._hasMoved) {
 				const { x, y } = this._clientToCanvas(e.clientX, e.clientY);
 				this._handleClick(x, y);
 			}
 			this._stripPanelScroll = null;
-			this._hasDragged = false;
+			this._hasMoved = false;
 			return;
 		}
 		if (this._panelScroll) {
-			if (!this._hasDragged) {
+			if (!this._hasMoved) {
 				const { x, y } = this._clientToCanvas(e.clientX, e.clientY);
 				this._handleClick(x, y);
 			}
 			this._panelScroll = null;
-			this._hasDragged = false;
+			this._hasMoved = false;
 			return;
 		}
-		if (this._drag && !this._hasDragged) {
+		if (this._drag && !this._hasMoved) {
 			const { x, y } = this._clientToCanvas(e.clientX, e.clientY);
 			this._handleClick(x, y);
 		}
 		this._drag = null;
-		this._hasDragged = false;
+		this._hasMoved = false;
 		this.canvas.style.cursor = 'grab';
 	}
 
@@ -337,7 +344,7 @@ class MuniEngine {
 		if (e.touches.length === 2) {
 			this._drag        = null;
 			this._panelScroll = null;
-			this._touchMoved  = false;
+			this._hasMoved  = false;
 			const rect   = this.canvas.getBoundingClientRect();
 			const scaleX = this.canvas.width  / rect.width;
 			const scaleY = this.canvas.height / rect.height;
@@ -351,7 +358,7 @@ class MuniEngine {
 			};
 		} else if (e.touches.length === 1) {
 			this._pinch      = null;
-			this._touchMoved = false;
+			this._hasMoved = false;
 			const { x, y }  = this._clientToCanvas(e.touches[0].clientX, e.touches[0].clientY);
 			if (this._inStripScrollArea(x, y)) {
 				this._stripPanelScroll = { startCanvasY: y, startScrollY: this._routeStripScrollY };
@@ -386,20 +393,20 @@ class MuniEngine {
 			const { x, y } = this._clientToCanvas(e.touches[0].clientX, e.touches[0].clientY);
 			if (this._stripPanelScroll) {
 				const dy = y - this._stripPanelScroll.startCanvasY;
-				if (!this._touchMoved && Math.abs(dy) > 4) this._touchMoved = true;
+				if (!this._hasMoved && Math.abs(dy) > 4) this._hasMoved = true;
 				this._scrollStripTo(this._stripPanelScroll.startScrollY - dy);
 				return;
 			}
 			if (this._panelScroll) {
 				const dy = y - this._panelScroll.startCanvasY;
-				if (!this._touchMoved && Math.abs(dy) > 4) this._touchMoved = true;
+				if (!this._hasMoved && Math.abs(dy) > 4) this._hasMoved = true;
 				this._scrollCatTo(this._panelScroll.catId, this._panelScroll.startScrollY - dy);
 				return;
 			}
 			if (this._drag) {
 				const dx = x - this._drag.startX;
 				const dy = y - this._drag.startY;
-				if (!this._touchMoved && (dx * dx + dy * dy > 16)) this._touchMoved = true;
+				if (!this._hasMoved && (dx * dx + dy * dy > 16)) this._hasMoved = true;
 				this._view.x = this._drag.startViewX + dx;
 				this._view.y = this._drag.startViewY + dy;
 				this._render();
@@ -410,38 +417,38 @@ class MuniEngine {
 	_onTouchEnd(e) {
 		if (e.touches.length === 0) {
 			if (this._stripPanelScroll) {
-				if (!this._touchMoved) {
+				if (!this._hasMoved) {
 					const t = e.changedTouches[0];
 					const { x, y } = this._clientToCanvas(t.clientX, t.clientY);
 					this._handleClick(x, y);
 				}
 				this._stripPanelScroll = null;
-				this._touchMoved       = false;
+				this._hasMoved       = false;
 				return;
 			}
 			if (this._panelScroll) {
-				if (!this._touchMoved) {
+				if (!this._hasMoved) {
 					const t = e.changedTouches[0];
 					const { x, y } = this._clientToCanvas(t.clientX, t.clientY);
 					this._handleClick(x, y);
 				}
 				this._panelScroll = null;
-				this._touchMoved  = false;
+				this._hasMoved  = false;
 				return;
 			}
-			if (this._drag && !this._touchMoved) {
+			if (this._drag && !this._hasMoved) {
 				const t = e.changedTouches[0];
 				const { x, y } = this._clientToCanvas(t.clientX, t.clientY);
 				this._handleClick(x, y);
 			}
 			this._drag       = null;
 			this._pinch      = null;
-			this._touchMoved = false;
+			this._hasMoved = false;
 		} else if (e.touches.length === 1) {
 			this._stripPanelScroll = null;
 			this._panelScroll = null;
 			this._pinch       = null;
-			this._touchMoved  = false;
+			this._hasMoved  = false;
 			const { x, y }   = this._clientToCanvas(e.touches[0].clientX, e.touches[0].clientY);
 			this._drag = { startX: x, startY: y, startViewX: this._view.x, startViewY: this._view.y };
 		}
@@ -456,32 +463,38 @@ class MuniEngine {
 
 	// Scroll by delta (relative)
 	_scrollCat(catId, delta) {
-		this._catScrollY[catId] = Math.max(0, Math.min(this._catListMaxScroll(catId), this._catScrollY[catId] + delta));
+		const newVal = Math.max(0, Math.min(this._catListMaxScroll(catId), this._catScrollY[catId] + delta));
+		if (newVal === this._catScrollY[catId]) return;
+		this._catScrollY[catId] = newVal;
 		this._render();
 	}
 
 	// Scroll to absolute value
 	_scrollCatTo(catId, value) {
-		this._catScrollY[catId] = Math.max(0, Math.min(this._catListMaxScroll(catId), value));
+		const newVal = Math.max(0, Math.min(this._catListMaxScroll(catId), value));
+		if (newVal === this._catScrollY[catId]) return;
+		this._catScrollY[catId] = newVal;
 		this._render();
 	}
 
 	_scrollStrip(delta) {
 		if (!this._stripScrollArea) return;
-		this._routeStripScrollY = Math.max(0, Math.min(this._stripScrollArea.maxScroll, this._routeStripScrollY + delta));
+		const newVal = Math.max(0, Math.min(this._stripScrollArea.maxScroll, this._routeStripScrollY + delta));
+		if (newVal === this._routeStripScrollY) return;
+		this._routeStripScrollY = newVal;
 		this._render();
 	}
 
 	_scrollStripTo(value) {
 		if (!this._stripScrollArea) return;
-		this._routeStripScrollY = Math.max(0, Math.min(this._stripScrollArea.maxScroll, value));
+		const newVal = Math.max(0, Math.min(this._stripScrollArea.maxScroll, value));
+		if (newVal === this._routeStripScrollY) return;
+		this._routeStripScrollY = newVal;
 		this._render();
 	}
 
 	_inStripScrollArea(x, y) {
-		const a = this._stripScrollArea;
-		if (!a) return false;
-		return x >= a.x && x <= a.x + a.w && y >= a.y && y <= a.y + a.h;
+		return this._stripScrollArea ? this._pointInBounds(x, y, this._stripScrollArea) : false;
 	}
 
 	// ── Route visibility ──────────────────────────────────────────────────────
@@ -563,24 +576,18 @@ class MuniEngine {
 
 	_handleClick(cx, cy) {
 		for (const t of this._stripHitTargets) {
-			if (cx >= t.x && cx <= t.x + t.w && cy >= t.y && cy <= t.y + t.h) {
-				t.action();
-				return;
-			}
+			if (this._pointInBounds(cx, cy, t)) { t.action(); return; }
 		}
 		for (const t of this._hitTargets) {
-			if (cx >= t.x && cx <= t.x + t.w && cy >= t.y && cy <= t.y + t.h) {
-				t.action();
-				return;
-			}
+			if (this._pointInBounds(cx, cy, t)) { t.action(); return; }
 		}
 	}
 
 	// ── Data ──────────────────────────────────────────────────────────────────
 
 	async _fetchStatic() {
-		const apiKey = window.MUNI_LOCAL_KEY ?? MUNI_API_KEY;
-		if (apiKey === 'MUNI_API_KEY_PLACEHOLDER') return;
+		const apiKey = this._apiKey;
+		if (!apiKey) return;
 		await this._fetchStops(apiKey);
 		this._render();
 	}
@@ -609,8 +616,8 @@ class MuniEngine {
 	}
 
 	async _fetchLinePattern(lineRef) {
-		const apiKey = window.MUNI_LOCAL_KEY ?? MUNI_API_KEY;
-		if (apiKey === 'MUNI_API_KEY_PLACEHOLDER') return;
+		const apiKey = this._apiKey;
+		if (!apiKey) return;
 		try {
 			const url = `https://api.511.org/transit/patterns?api_key=${apiKey}&operator_id=SF&line_id=${encodeURIComponent(lineRef)}&format=json`;
 			const res = await fetch(url);
@@ -638,6 +645,8 @@ class MuniEngine {
 				if (coords.length >= 2) shapes.push(coords);
 			}
 			this._lineShapes.set(lineRef, shapes);
+			const canon = shapes.length > 0 ? shapes.reduce((a, b) => b.length > a.length ? b : a) : null;
+			this._lineShapeTs.set(lineRef, canon ? this._computeShapeTs(canon) : []);
 			this._render();
 			if (this._selectedRoute === lineRef) this._fitToRoute(lineRef);
 		} catch (e) {
@@ -646,9 +655,9 @@ class MuniEngine {
 	}
 
 	async _fetch() {
-		const apiKey = window.MUNI_LOCAL_KEY ?? MUNI_API_KEY;
+		const apiKey = this._apiKey;
 
-		if (apiKey === 'MUNI_API_KEY_PLACEHOLDER') {
+		if (!apiKey) {
 			this._render();
 			return;
 		}
@@ -725,8 +734,7 @@ class MuniEngine {
 			this._isLoading = false;
 			this._failCount = 0;
 
-			const spinner = document.getElementById('muni-spinner');
-			if (spinner) spinner.remove();
+			if (this._spinner) { this._spinner.remove(); this._spinner = null; }
 		} catch (e) {
 			if (e.name !== 'AbortError') {
 				this._failCount++;
@@ -738,10 +746,12 @@ class MuniEngine {
 	}
 
 	_updateHistory(vehicles) {
+		const activeRefs = new Set();
 		for (const v of vehicles) {
 			this._registerRoute(v.line);
 
 			if (!v.ref) continue;
+			activeRefs.add(v.ref);
 			const trail = this._history.get(v.ref) ?? [];
 			const last = trail[trail.length - 1];
 			// Record where the dot was when this data arrived (fromLat/fromLon),
@@ -752,13 +762,28 @@ class MuniEngine {
 			this._history.set(v.ref, trail);
 		}
 
-		const activeRefs = new Set(vehicles.map(v => v.ref).filter(Boolean));
 		for (const ref of this._history.keys()) {
 			if (!activeRefs.has(ref)) this._history.delete(ref);
 		}
 	}
 
 	// ── Projection ────────────────────────────────────────────────────────────
+
+	_pointInBounds(x, y, b) {
+		return x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+	}
+
+	_vehicleGradient(x, y, color) {
+		const grad = this.ctx.createRadialGradient(x, y, 0, x, y, 4);
+		grad.addColorStop(0, color);
+		grad.addColorStop(0.25, color);
+		grad.addColorStop(1, color + '00');
+		return grad;
+	}
+
+	_toHex(a) {
+		return Math.round(Math.max(0, a) * 255).toString(16).padStart(2, '0');
+	}
 
 	_project(lat, lon) {
 		const x = (lon - MUNI_SF_BOUNDS.minLon) * this._projCosLat * this._projScale;
@@ -780,13 +805,16 @@ class MuniEngine {
 
 	_animatedPos(v) {
 		if (!v.animStart) return { lat: v.lat, lon: v.lon };
+		if (v.ref && this._animCache?.has(v.ref)) return this._animCache.get(v.ref);
 		const duration = v.animDuration ?? this._avgFetchInterval;
 		const t     = Math.min(1, (Date.now() - v.animStart) / duration);
 		const eased = t * t * (3 - 2 * t); // smoothstep ease-in/ease-out
-		return {
+		const result = {
 			lat: v.fromLat + (v.lat - v.fromLat) * eased,
 			lon: v.fromLon + (v.lon - v.fromLon) * eased
 		};
+		if (v.ref && this._animCache) this._animCache.set(v.ref, result);
+		return result;
 	}
 
 	_routeColor(line) {
@@ -892,7 +920,7 @@ class MuniEngine {
 		const headerH   = 56;
 		const footerH   = 8;
 
-		const stopTs   = canon ? this._computeShapeTs(canon) : [];
+		const stopTs   = this._lineShapeTs.get(lineRef) ?? [];
 		const numSegs  = Math.max(1, stopTs.length - 1);
 		const availH   = this.canvas.height - 16 - headerH - footerH;
 		const rowH         = 18;
@@ -984,7 +1012,7 @@ class MuniEngine {
 				           : (this._stopPoints.get(stopId)?.name ?? '');
 				if (name) {
 					ctx.textAlign = 'center';
-					ctx.fillStyle = (si === 0 || si === numSegs) ? '#fff' : textColor;
+					ctx.fillStyle = textColor;
 					ctx.fillText(name, xCenter, sy + nameFontSz * 0.35);
 				}
 			}
@@ -1016,13 +1044,9 @@ class MuniEngine {
 				}
 				const vy  = stripTop + ut * stripH;
 				const vx  = v.direction === 'IB' ? xOB : xIB;
-				const grad = ctx.createRadialGradient(vx, vy, 0, vx, vy, 4);
-				grad.addColorStop(0, color);
-				grad.addColorStop(0.25, color);
-				grad.addColorStop(1, color + '00');
 				ctx.beginPath();
 				ctx.arc(vx, vy, 6, 0, Math.PI * 2);
-				ctx.fillStyle = grad;
+				ctx.fillStyle = this._vehicleGradient(vx, vy, color);
 				ctx.fill();
 				ctx.beginPath();
 				ctx.arc(vx, vy, 1, 0, Math.PI * 2);
@@ -1054,7 +1078,7 @@ class MuniEngine {
 		ctx.fillStyle = '#000';
 		ctx.fillRect(0, 0, w, h);
 
-		if (MUNI_API_KEY === 'MUNI_API_KEY_PLACEHOLDER' && !window.MUNI_LOCAL_KEY) {
+		if (!this._apiKey) {
 			ctx.fillStyle = 'rgba(255,255,255,0.4)';
 			ctx.font = '14px Courier New';
 			ctx.textAlign = 'center';
@@ -1063,6 +1087,8 @@ class MuniEngine {
 		}
 
 		if (this._isLoading) return;
+
+		this._animCache = new Map();
 
 		// ── World-space drawing (affected by pan/zoom) ──
 		ctx.save();
@@ -1116,7 +1142,6 @@ class MuniEngine {
 
 		const trailNow    = Date.now();
 		const trailMaxAge = this._avgFetchInterval * MUNI_HISTORY_MAX;
-		const toHex       = a => Math.round(Math.max(0, a) * 255).toString(16).padStart(2, '0');
 
 		for (const [ref, trail] of this._history) {
 			if (trail.length < 1) continue;
@@ -1137,8 +1162,8 @@ class MuniEngine {
 				const a0 = (1 - (trailNow - pts[i - 1].t) / trailMaxAge) * 0.75;
 				const a1 = (1 - (trailNow - pts[i].t)     / trailMaxAge) * 0.75;
 				const grad = ctx.createLinearGradient(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y);
-				grad.addColorStop(0, color + toHex(a0));
-				grad.addColorStop(1, color + toHex(a1));
+				grad.addColorStop(0, color + this._toHex(a0));
+				grad.addColorStop(1, color + this._toHex(a1));
 				ctx.beginPath();
 				ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
 				ctx.lineTo(pts[i].x, pts[i].y);
@@ -1152,13 +1177,9 @@ class MuniEngine {
 			const pos = this._animatedPos(v);
 			const { x, y } = this._project(pos.lat, pos.lon);
 			const color = this._routeColor(v.line);
-			const grad = ctx.createRadialGradient(x, y, 0, x, y, 4);
-			grad.addColorStop(0, color);
-			grad.addColorStop(0.25, color);
-			grad.addColorStop(1, color + '00');
 			ctx.beginPath();
 			ctx.arc(x, y, 6, 0, Math.PI * 2);
-			ctx.fillStyle = grad;
+			ctx.fillStyle = this._vehicleGradient(x, y, color);
 			ctx.fill();
 			ctx.beginPath();
 			ctx.arc(x, y, 1, 0, Math.PI * 2);
