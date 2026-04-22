@@ -38,7 +38,7 @@ const MUNI_POLL_INTERVAL   = 15000; // ms — SFMTA source refreshes every ~30s
 const MUNI_ANIM_DURATION   = 15000; // ms — starting animation duration (adapts to real fetch interval)
 const MUNI_RUSH_DURATION   =  3000; // ms — rush remaining animation when new data interrupts
 const MUNI_HISTORY_MAX     = 6;     // snapshots retained per vehicle
-const MUNI_ZOOM_MIN        = 0.5;
+const MUNI_ZOOM_MIN        = 1;
 const MUNI_ZOOM_MAX        = 20;
 const MUNI_PANEL_CAT_H  = 18; // category header row height px
 const MUNI_PANEL_ITEM_H = 22; // route row height px
@@ -70,10 +70,11 @@ class MuniEngine {
 		);
 		this._projCosLat = _cosLat;
 
-		// View transform: translate then scale — center map content on load
+		// View transform: translate then scale — zoom to fill screen, centered
 		const _mapW = (MUNI_SF_BOUNDS.maxLon - MUNI_SF_BOUNDS.minLon) * _cosLat * this._projScale;
 		const _mapH = (MUNI_SF_BOUNDS.maxLat - MUNI_SF_BOUNDS.minLat) * this._projScale;
-		this._view = { scale: 1, x: (this._worldW - _mapW) / 2, y: (this._worldH - _mapH) / 2 };
+		const _fillScale = Math.max(this._worldW / _mapW, this._worldH / _mapH);
+		this._view = { scale: _fillScale, x: (this._worldW - _mapW * _fillScale) / 2, y: (this._worldH - _mapH * _fillScale) / 2 };
 
 		// Drag/pinch interaction state
 		this._drag       = null;  // { startX, startY, startViewX, startViewY }
