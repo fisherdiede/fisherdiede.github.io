@@ -6,6 +6,15 @@ class UIEngine {
 		this.state = state;
 		this.config = config;
 		this.mediaController = mediaController;
+
+		// Virtual scroll state (portfolio lists use drag-based scroll, not CSS overflow)
+		this._scrollDragging = false;
+		this._scrollTouchStartY = 0;
+		this._scrollOffsetAtStart = 0;
+		this._scrollVelocity = 0;
+		this._scrollLastY = 0;
+		this._scrollLastTime = 0;
+		this._scrollMomentumFrame = null;
 	}
 
 	/**
@@ -221,9 +230,8 @@ class UIEngine {
 		portfolioList.style('top', '60px');
 		portfolioList.style('left', '0');
 		portfolioList.style('z-index', '105');
-		portfolioList.style('overflow-y', 'scroll');
+		portfolioList.style('overflow', 'hidden');
 		portfolioList.style('overflow-x', 'hidden');
-		portfolioList.style('-webkit-overflow-scrolling', 'touch');
 		portfolioList.style('transform', 'translateX(0) translateY(0) scale(1) translateZ(0)');  // Initial position
 		portfolioList.style('transition', 'transform 0.3s ease-out');  // Add transition
 		portfolioList.style('will-change', 'transform');  // Optimize for transforms
@@ -234,8 +242,6 @@ class UIEngine {
 		portfolioList.style('opacity', '0');
 		portfolioList.style('pointer-events', 'none'); // Let clicks pass through - items have pointer-events: auto
 		portfolioList.style('padding', '40px 0px');
-		portfolioList.style('overflow-y', 'auto');
-		portfolioList.style('-webkit-overflow-scrolling', 'touch');
 
 		// Create items wrapper with top-level portfolio items
 		let itemsWrapper = this._createPortfolioItemsWrapper(
@@ -247,6 +253,7 @@ class UIEngine {
 
 		// Add wrapper to portfolio list
 		portfolioList.child(itemsWrapper);
+		this._bindScrollHandlers(portfolioList.elt, itemsWrapper.elt);
 	}
 
 	_createOverlay() {
@@ -795,7 +802,6 @@ class UIEngine {
 
 		// Dim all items in parent container except clicked one
 		if (parentContainer) {
-			parentContainer.style('overflow-y', 'hidden');
 
 			// Find clicked item and mark all items as parent level in one pass
 			let clickedItem = null;
@@ -875,8 +881,7 @@ class UIEngine {
 			newContainer.style('flex-direction', 'column');
 			newContainer.style('align-items', 'center');
 			newContainer.style('justify-content', 'flex-start');
-			newContainer.style('overflow-y', 'auto');
-			newContainer.style('-webkit-overflow-scrolling', 'touch');
+			newContainer.style('overflow', 'hidden');
 
 			// Create items wrapper with submenu items
 			let itemsWrapper = this._createPortfolioItemsWrapper(
@@ -888,6 +893,7 @@ class UIEngine {
 			);
 
 			newContainer.child(itemsWrapper);
+			this._bindScrollHandlers(newContainer.elt, itemsWrapper.elt);
 		}
 
 		// Add to stack FIRST
@@ -952,9 +958,8 @@ class UIEngine {
 		this._stopMenuAutoHideTimer();
 		this._showMenu();
 
-		// Restore opacity and scrolling in parent container
+		// Restore opacity in parent container
 		if (parentContainer) {
-			parentContainer.style('overflow-y', 'auto');
 
 			// Remove parent-level markers from items since they're now current level
 			let items = parentContainer.elt.querySelectorAll('.portfolio-item, .portfolio-nav-item');
@@ -1025,7 +1030,7 @@ class UIEngine {
 		itemsWrapper.style('flex-direction', 'column');
 		itemsWrapper.style('align-items', 'center');
 		itemsWrapper.style('gap', this.config.MENU_ITEM_GAP + 'px');
-		itemsWrapper.style('pointer-events', 'none'); // Let clicks pass through to items
+		itemsWrapper.style('pointer-events', 'auto');
 
 		// Create items
 		items.forEach((item) => {
@@ -1313,7 +1318,7 @@ class UIEngine {
 		itemDiv.elt.addEventListener('click', clickHandler);
 		itemDiv.elt.addEventListener('touchend', (e) => {
 			e.preventDefault(); // Prevent 300ms delay on mobile
-			clickHandler(e);
+			if (!this._scrollDragging) clickHandler(e);
 		}, { passive: false });
 
 		return itemDiv;
@@ -1337,6 +1342,90 @@ class UIEngine {
 				items[i].style.opacity = opacity.toString();
 			}
 		}
+	}
+
+	// ==================== PRIVATE METHODS - VIRTUAL SCROLL ====================
+
+	_bindScrollHandlers(containerEl, wrapperEl) {
+		containerEl._wrapper = wrapperEl;
+		containerEl._scrollY = 0;
+
+		wrapperEl.addEventListener('touchstart', (e) => {
+			if (this._scrollMomentumFrame) {
+				cancelAnimationFrame(this._scrollMomentumFrame);
+				this._scrollMomentumFrame = null;
+			}
+			this._scrollDragging = false;
+			this._scrollTouchStartY = e.touches[0].clientY;
+			this._scrollOffsetAtStart = containerEl._scrollY;
+			this._scrollLastY = e.touches[0].clientY;
+			this._scrollLastTime = Date.now();
+			this._scrollVelocity = 0;
+			this._scrollActiveContainer = containerEl;
+		}, { passive: false });
+
+		wrapperEl.addEventListener('touchmove', (e) => {
+			e.preventDefault();
+			const dy = this._scrollTouchStartY - e.touches[0].clientY;
+			if (!this._scrollDragging && Math.abs(dy) > 5) this._scrollDragging = true;
+			if (!this._scrollDragging) return;
+
+			const now = Date.now();
+			const dt = now - this._scrollLastTime;
+			if (dt > 0) this._scrollVelocity = (this._scrollLastY - e.touches[0].clientY) / dt;
+			this._scrollLastY = e.touches[0].clientY;
+			this._scrollLastTime = now;
+
+			containerEl._scrollY = Math.max(0, Math.min(this._getMaxScroll(containerEl), this._scrollOffsetAtStart + dy));
+			this._applyScroll(containerEl);
+		}, { passive: false });
+
+		wrapperEl.addEventListener('touchend', () => {
+			if (this._scrollDragging) this._startMomentum(containerEl);
+			setTimeout(() => { this._scrollDragging = false; }, 0);
+		});
+
+		wrapperEl.addEventListener('wheel', (e) => {
+			e.preventDefault();
+			if (this._scrollMomentumFrame) {
+				cancelAnimationFrame(this._scrollMomentumFrame);
+				this._scrollMomentumFrame = null;
+			}
+			containerEl._scrollY = Math.max(0, Math.min(this._getMaxScroll(containerEl), containerEl._scrollY + e.deltaY));
+			this._applyScroll(containerEl);
+		}, { passive: false });
+	}
+
+	_getMaxScroll(containerEl) {
+		const wrapper = containerEl._wrapper;
+		if (!wrapper) return 0;
+		return Math.max(0, wrapper.offsetHeight - containerEl.clientHeight);
+	}
+
+	_applyScroll(containerEl) {
+		const wrapper = containerEl._wrapper;
+		if (!wrapper) return;
+		wrapper.style.transform = `translateY(${-containerEl._scrollY}px)`;
+	}
+
+	_startMomentum(containerEl) {
+		const decelerate = () => {
+			this._scrollVelocity *= 0.95;
+			if (Math.abs(this._scrollVelocity) < 0.05) {
+				this._scrollMomentumFrame = null;
+				return;
+			}
+			containerEl._scrollY = Math.max(0, Math.min(this._getMaxScroll(containerEl), containerEl._scrollY + this._scrollVelocity * 16));
+			this._applyScroll(containerEl);
+			this._scrollMomentumFrame = requestAnimationFrame(decelerate);
+		};
+		this._scrollMomentumFrame = requestAnimationFrame(decelerate);
+	}
+
+	_resetContainerScroll(containerEl) {
+		if (!containerEl) return;
+		containerEl._scrollY = 0;
+		if (containerEl._wrapper) containerEl._wrapper.style.transform = '';
 	}
 
 	/**
@@ -1421,8 +1510,8 @@ class UIEngine {
 			portfolioList.style('transform', 'translateX(0) translateY(0) scale(1)');
 			portfolioList.style('transition', 'transform 0.3s ease-out');
 
-			// Restore opacity and scrolling for portfolio list
-			portfolioList.style('overflow-y', 'scroll');
+			// Restore opacity and reset virtual scroll
+			this._resetContainerScroll(portfolioList.elt);
 			this._updateContainerItemsOpacity(portfolioList, 1);
 
 			// Clear stored audio configs and transforms from portfolio items
