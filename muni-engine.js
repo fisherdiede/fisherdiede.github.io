@@ -642,7 +642,7 @@ class MuniEngine {
 			// Record where the dot was when this data arrived (fromLat/fromLon),
 			// not the destination — the animated head covers the live segment
 			if (last && last.lat === v.fromLat && last.lon === v.fromLon) continue;
-			trail.push({ lat: v.fromLat, lon: v.fromLon, line: v.line });
+			trail.push({ lat: v.fromLat, lon: v.fromLon, line: v.line, t: Date.now() });
 			if (trail.length > MUNI_HISTORY_MAX) trail.shift();
 			this._history.set(v.ref, trail);
 		}
@@ -748,6 +748,10 @@ class MuniEngine {
 
 		const vehicleByRef = new Map(this._vehicles.map(v => [v.ref, v]));
 
+		const trailNow    = Date.now();
+		const trailMaxAge = this._avgFetchInterval * MUNI_HISTORY_MAX;
+		const toHex       = a => Math.round(Math.max(0, a) * 255).toString(16).padStart(2, '0');
+
 		for (const [ref, trail] of this._history) {
 			if (trail.length < 1) continue;
 			if (!this._isVisible(trail[trail.length - 1].line)) continue;
@@ -758,24 +762,23 @@ class MuniEngine {
 			const v    = vehicleByRef.get(ref);
 			const head = v ? this._animatedPos(v) : { lat: trail[trail.length - 1].lat, lon: trail[trail.length - 1].lon };
 			const pts  = [
-				...trail.map(p => this._project(p.lat, p.lon)),
-				this._project(head.lat, head.lon)
+				...trail.map(p => ({ ...this._project(p.lat, p.lon), t: p.t ?? trailNow })),
+				{ ...this._project(head.lat, head.lon), t: trailNow }
 			];
-			const first = pts[0];
-			const last  = pts[pts.length - 1];
 
-			// Gradient aligned to overall travel direction (transparent tail → opaque head)
-			const grad = ctx.createLinearGradient(first.x, first.y, last.x, last.y);
-			grad.addColorStop(0, color + '00');
-			grad.addColorStop(1, color + 'bf');
-
-			ctx.beginPath();
-			ctx.moveTo(first.x, first.y);
-			for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-
-			ctx.strokeStyle = grad;
-			ctx.lineWidth   = 2;
-			ctx.stroke();
+			ctx.lineWidth = 2;
+			for (let i = 1; i < pts.length; i++) {
+				const a0 = (1 - (trailNow - pts[i - 1].t) / trailMaxAge) * 0.75;
+				const a1 = (1 - (trailNow - pts[i].t)     / trailMaxAge) * 0.75;
+				const grad = ctx.createLinearGradient(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y);
+				grad.addColorStop(0, color + toHex(a0));
+				grad.addColorStop(1, color + toHex(a1));
+				ctx.beginPath();
+				ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
+				ctx.lineTo(pts[i].x, pts[i].y);
+				ctx.strokeStyle = grad;
+				ctx.stroke();
+			}
 		}
 
 		for (const v of this._vehicles) {
@@ -783,9 +786,12 @@ class MuniEngine {
 			const pos = this._animatedPos(v);
 			const { x, y } = this._project(pos.lat, pos.lon);
 			const color = this._routeColor(v.line);
+			const grad = ctx.createRadialGradient(x, y, 0, x, y, 6);
+			grad.addColorStop(0, color);
+			grad.addColorStop(1, color + '00');
 			ctx.beginPath();
-			ctx.arc(x, y, 4, 0, Math.PI * 2);
-			ctx.fillStyle = color;
+			ctx.arc(x, y, 6, 0, Math.PI * 2);
+			ctx.fillStyle = grad;
 			ctx.fill();
 		}
 
