@@ -35,7 +35,9 @@ const MUNI_OVERLAY_CATEGORIES = [
 ];
 
 const MUNI_POLL_INTERVAL   = 15000; // ms — SFMTA source refreshes every ~30s
-const MUNI_HISTORY_MAX     = 20;    // snapshots retained per vehicle
+const MUNI_ANIM_DURATION   = 15000; // ms — starting animation duration (adapts to real fetch interval)
+const MUNI_RUSH_DURATION   =  3000; // ms — rush remaining animation when new data interrupts
+const MUNI_HISTORY_MAX     = 6;     // snapshots retained per vehicle
 const MUNI_ZOOM_MIN        = 0.5;
 const MUNI_ZOOM_MAX        = 20;
 const MUNI_PANEL_CAT_H  = 18; // category header row height px
@@ -46,11 +48,14 @@ class MuniEngine {
 		this.canvas = canvas;
 		this.ctx = canvas.getContext('2d');
 		this._interval = null;
+		this._rafId = null;
 		this._abortController = null;
 		this._isLoading = true;
 		this._vehicles = [];
 		this._history = new Map(); // vehicleRef -> [{lat, lon, line}]
 		this._lastUpdated = null;
+		this._lastFetchTime = null;
+		this._avgFetchInterval = MUNI_ANIM_DURATION; // ms, adapts via running average
 		this._failCount = 0;
 
 		// World dimensions — fixed at construction so _project is stable across resizes
@@ -97,6 +102,7 @@ class MuniEngine {
 		this._onTouchMove  = this._onTouchMove.bind(this);
 		this._onTouchEnd   = this._onTouchEnd.bind(this);
 		this._onResize     = this._onResize.bind(this);
+		this._animLoop     = this._animLoop.bind(this);
 	}
 
 	start() {
@@ -104,16 +110,42 @@ class MuniEngine {
 		this._fetchStatic();
 		this._fetch();
 		this._interval = setInterval(() => this._fetch(), MUNI_POLL_INTERVAL);
+		this._rafId = requestAnimationFrame(this._animLoop);
 	}
 
 	stop() {
 		clearInterval(this._interval);
 		this._interval = null;
+		if (this._rafId) { cancelAnimationFrame(this._rafId); this._rafId = null; }
 		if (this._abortController) {
 			this._abortController.abort();
 			this._abortController = null;
 		}
 		this._unbindEvents();
+	}
+
+	_animLoop() {
+		this._advancePending();
+		this._render();
+		this._rafId = requestAnimationFrame(this._animLoop);
+	}
+
+	_advancePending() {
+		const now = Date.now();
+		for (const v of this._vehicles) {
+			if (v.pendingLat === undefined) continue;
+			const duration = v.animDuration ?? this._avgFetchInterval;
+			if ((now - v.animStart) / duration < 1) continue;
+			// Rush complete — promote pending to active animation
+			v.fromLat = v.lat;
+			v.fromLon = v.lon;
+			v.lat = v.pendingLat;
+			v.lon = v.pendingLon;
+			v.animStart = now;
+			delete v.animDuration;
+			delete v.pendingLat;
+			delete v.pendingLon;
+		}
 	}
 
 	// ── Event binding ─────────────────────────────────────────────────────────
@@ -406,7 +438,7 @@ class MuniEngine {
 	}
 
 	_toggleRoute(lineRef) {
-		this._routeVisible.set(lineRef, this._routeVisible.get(lineRef) === false ? true : false);
+		this._routeVisible.set(lineRef, this._routeVisible.get(lineRef) === false);
 		this._render();
 	}
 
@@ -526,16 +558,51 @@ class MuniEngine {
 			const data = await res.json();
 
 			const activities = data?.Siri?.ServiceDelivery?.VehicleMonitoringDelivery?.VehicleActivity ?? [];
+			const prevById = new Map(this._vehicles.map(v => [v.ref, v]));
+			const now = Date.now();
+
+			// Update running average of real fetch interval (clamped to avoid tab-background spikes)
+			if (this._lastFetchTime) {
+				const dt = Math.max(5000, Math.min(60000, now - this._lastFetchTime));
+				this._avgFetchInterval = 0.25 * dt + 0.75 * this._avgFetchInterval;
+			}
+			this._lastFetchTime = now;
+
 			this._vehicles = activities
 				.map(a => a?.MonitoredVehicleJourney)
 				.filter(j => j?.VehicleLocation?.Latitude && j?.VehicleLocation?.Longitude)
-				.map(j => ({
-					ref: j.VehicleRef ?? null,
-					lat: parseFloat(j.VehicleLocation.Latitude),
-					lon: parseFloat(j.VehicleLocation.Longitude),
-					line: j.LineRef || 'OOS',
-					direction: j.DirectionRef ?? ''
-				}));
+				.map(j => {
+					const lat  = parseFloat(j.VehicleLocation.Latitude);
+					const lon  = parseFloat(j.VehicleLocation.Longitude);
+					const prev = j.VehicleRef ? prevById.get(j.VehicleRef) : null;
+					const base = { ref: j.VehicleRef ?? null, lat, lon, line: j.LineRef || 'OOS' };
+
+					if (!prev) {
+						// New vehicle — appear immediately at reported position
+						return { ...base, fromLat: lat, fromLon: lon, animStart: now - this._avgFetchInterval };
+					}
+
+					const elapsed  = now - prev.animStart;
+					const duration = prev.animDuration ?? this._avgFetchInterval;
+					if (elapsed >= duration) {
+						// Previous animation already complete — start fresh from destination
+						return { ...base, fromLat: prev.lat, fromLon: prev.lon, animStart: now };
+					}
+
+					// Mid-animation — rush current leg to completion, then start new animation
+					const animPos = this._animatedPos(prev);
+					return {
+						...base,
+						lat:          prev.lat,       // finish rushing to the old destination
+						lon:          prev.lon,
+						fromLat:      animPos.lat,    // from wherever the dot is right now
+						fromLon:      animPos.lon,
+						animStart:    now,
+						animDuration: MUNI_RUSH_DURATION,
+						pendingLat:   lat,            // new destination waits its turn
+						pendingLon:   lon
+					};
+				});
 
 			this._updateHistory(this._vehicles);
 			this._lastUpdated = new Date();
@@ -561,8 +628,10 @@ class MuniEngine {
 			if (!v.ref) continue;
 			const trail = this._history.get(v.ref) ?? [];
 			const last = trail[trail.length - 1];
-			if (last && last.lat === v.lat && last.lon === v.lon) continue;
-			trail.push({ lat: v.lat, lon: v.lon, line: v.line });
+			// Record where the dot was when this data arrived (fromLat/fromLon),
+			// not the destination — the animated head covers the live segment
+			if (last && last.lat === v.fromLat && last.lon === v.fromLon) continue;
+			trail.push({ lat: v.fromLat, lon: v.fromLon, line: v.line });
 			if (trail.length > MUNI_HISTORY_MAX) trail.shift();
 			this._history.set(v.ref, trail);
 		}
@@ -580,6 +649,17 @@ class MuniEngine {
 		const x = ((lon - minLon) / (maxLon - minLon)) * this._worldW;
 		const y = (1 - (lat - minLat) / (maxLat - minLat)) * this._worldH;
 		return { x, y };
+	}
+
+	_animatedPos(v) {
+		if (!v.animStart) return { lat: v.lat, lon: v.lon };
+		const duration = v.animDuration ?? this._avgFetchInterval;
+		const t     = Math.min(1, (Date.now() - v.animStart) / duration);
+		const eased = t * t * (3 - 2 * t); // smoothstep ease-in/ease-out
+		return {
+			lat: v.fromLat + (v.lat - v.fromLat) * eased,
+			lon: v.fromLon + (v.lon - v.fromLon) * eased
+		};
 	}
 
 	_routeColor(line) {
@@ -656,12 +736,21 @@ class MuniEngine {
 			}
 		}
 
-		for (const [, trail] of this._history) {
-			if (trail.length < 2) continue;
+		const vehicleByRef = new Map(this._vehicles.map(v => [v.ref, v]));
+
+		for (const [ref, trail] of this._history) {
+			if (trail.length < 1) continue;
 			if (!this._isVisible(trail[trail.length - 1].line)) continue;
 
 			const color = this._routeColor(trail[trail.length - 1].line);
-			const pts   = trail.map(p => this._project(p.lat, p.lon));
+
+			// Append current animated position as the trail head so it follows the dot live
+			const v    = vehicleByRef.get(ref);
+			const head = v ? this._animatedPos(v) : { lat: trail[trail.length - 1].lat, lon: trail[trail.length - 1].lon };
+			const pts  = [
+				...trail.map(p => this._project(p.lat, p.lon)),
+				this._project(head.lat, head.lon)
+			];
 			const first = pts[0];
 			const last  = pts[pts.length - 1];
 
@@ -681,7 +770,8 @@ class MuniEngine {
 
 		for (const v of this._vehicles) {
 			if (!this._isVisible(v.line)) continue;
-			const { x, y } = this._project(v.lat, v.lon);
+			const pos = this._animatedPos(v);
+			const { x, y } = this._project(pos.lat, pos.lon);
 			const color = this._routeColor(v.line);
 			ctx.beginPath();
 			ctx.arc(x, y, 4, 0, Math.PI * 2);
@@ -696,7 +786,7 @@ class MuniEngine {
 		ctx.textAlign = 'left';
 		ctx.fillStyle = 'rgba(255,255,255,0.55)';
 		ctx.fillText('MUNI', 16, h - 32);
-		ctx.fillText(`${this._vehicles.length} vehicles`, 16, h - 16);
+		ctx.fillText(`${this._vehicles.length} active vehicles`, 16, h - 16);
 
 		if (this._lastUpdated) {
 			ctx.textAlign = 'right';
