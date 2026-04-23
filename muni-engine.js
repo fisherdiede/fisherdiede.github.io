@@ -773,12 +773,11 @@ class MuniEngine {
 		return x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
 	}
 
-	_vehicleGradient(x, y, color) {
-		const grad = this.ctx.createRadialGradient(x, y, 0, x, y, 4);
-		grad.addColorStop(0, color);
-		grad.addColorStop(0.25, color);
-		grad.addColorStop(1, color + '00');
-		return grad;
+	_drawVehicleDot(ctx, x, y, color) {
+		ctx.beginPath();
+		ctx.arc(x, y, 2, 0, Math.PI * 2);
+		ctx.fillStyle = color;
+		ctx.fill();
 	}
 
 	_toHex(a) {
@@ -1044,14 +1043,7 @@ class MuniEngine {
 				}
 				const vy  = stripTop + ut * stripH;
 				const vx  = v.direction === 'IB' ? xOB : xIB;
-				ctx.beginPath();
-				ctx.arc(vx, vy, 6, 0, Math.PI * 2);
-				ctx.fillStyle = this._vehicleGradient(vx, vy, color);
-				ctx.fill();
-				ctx.beginPath();
-				ctx.arc(vx, vy, 1, 0, Math.PI * 2);
-				ctx.fillStyle = color;
-				ctx.fill();
+				this._drawVehicleDot(ctx, vx, vy, color);
 			}
 		}
 
@@ -1177,14 +1169,7 @@ class MuniEngine {
 			const pos = this._animatedPos(v);
 			const { x, y } = this._project(pos.lat, pos.lon);
 			const color = this._routeColor(v.line);
-			ctx.beginPath();
-			ctx.arc(x, y, 6, 0, Math.PI * 2);
-			ctx.fillStyle = this._vehicleGradient(x, y, color);
-			ctx.fill();
-			ctx.beginPath();
-			ctx.arc(x, y, 1, 0, Math.PI * 2);
-			ctx.fillStyle = color;
-			ctx.fill();
+			this._drawVehicleDot(ctx, x, y, color);
 		}
 
 		ctx.restore(); // ── End world-space transform ──
