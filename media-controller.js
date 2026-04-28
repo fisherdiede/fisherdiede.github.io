@@ -189,7 +189,7 @@ class MediaController {
 		requestAnimationFrame(() => { overlay.style.opacity = '1'; });
 
 		this._muniOverlay = overlay;
-		this._muniEngine = new MuniEngine(canvas);
+		this._muniEngine = new MuniEngine(canvas, this);
 		this._muniEngine.start();
 	}
 

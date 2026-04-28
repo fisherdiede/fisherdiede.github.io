@@ -45,10 +45,14 @@ const MUNI_PANEL_ITEM_H = 22; // route row height px
 const MUNI_OB_DARKEN    = 0.33; // factor for outbound color darkening (0=none, 1=black)
 const MUNI_TERMINAL_HOLD_MS   = 10000; // ms — min time a train stays on its side after arriving at terminal
 const MUNI_TERMINAL_THRESHOLD = 0.9;   // ut fraction considered "at the terminal" (top or bottom of strip)
+const MUNI_PAN_BUFFER_X      = 240;   // px — horizontal map margin when panning to edge
+const MUNI_PAN_BUFFER_Y      = 40;    // px — vertical map margin when panning to edge
 
 class MuniEngine {
-	constructor(canvas) {
+	constructor(canvas, mediaController = null) {
 		this.canvas = canvas;
+		this._mediaController = mediaController;
+		this._lastRouteAudioConfig = null;
 		this.ctx = canvas.getContext('2d');
 		this._interval = null;
 		this._rafId = null;
@@ -78,11 +82,15 @@ class MuniEngine {
 		const _mapH = (MUNI_SF_BOUNDS.maxLat - MUNI_SF_BOUNDS.minLat) * this._projScale;
 		const _fillScale = Math.max(this._worldW / _mapW, this._worldH / _mapH);
 		this._view = { scale: _fillScale, x: (this._worldW - _mapW * _fillScale) / 2, y: (this._worldH - _mapH * _fillScale) / 2 };
+		this._mapW = _mapW;
+		this._mapH = _mapH;
 
 		// Drag/pinch interaction state
 		this._drag     = null;  // { startX, startY, startViewX, startViewY }
 		this._pinch    = null;  // { startDist, startScale, startMidX, startMidY, startViewX, startViewY }
 		this._hasMoved = false; // true once pointer moves > 4px (shared across mouse and touch)
+		this._atZoomBoundary = false;
+		this._atPanBoundary  = false;
 
 		// Animated view transition (e.g. fit-to-route)
 		this._viewAnim = null; // { from: {scale,x,y}, to: {scale,x,y}, startTime, duration }
@@ -236,11 +244,56 @@ class MuniEngine {
 	}
 
 	_applyZoom(px, py, factor) {
-		const newScale = Math.max(MUNI_ZOOM_MIN, Math.min(MUNI_ZOOM_MAX, this._view.scale * factor));
+		const rawScale = this._view.scale * factor;
+		const newScale = Math.max(MUNI_ZOOM_MIN, Math.min(MUNI_ZOOM_MAX, rawScale));
+		this._checkZoomBoundary(rawScale, newScale);
 		const ratio    = newScale / this._view.scale;
 		this._view.x   = px - ratio * (px - this._view.x);
 		this._view.y   = py - ratio * (py - this._view.y);
 		this._view.scale = newScale;
+		this._clampView(false);
+	}
+
+	_checkZoomBoundary(rawScale, clampedScale) {
+		if (rawScale !== clampedScale) {
+			if (!this._atZoomBoundary) {
+				this._atZoomBoundary = true;
+				this._mediaController?.playPortfolioItem(this._mediaController.config?.ADSR_TAB, null, 2, false);
+			}
+		} else {
+			this._atZoomBoundary = false;
+		}
+	}
+
+	_clampView(withAudio = false) {
+		const W = this.canvas.width;
+		const H = this.canvas.height;
+		const s = this._view.scale;
+		const bx = MUNI_PAN_BUFFER_X;
+		const by = MUNI_PAN_BUFFER_Y;
+		const mapW = this._mapW * s;
+		const mapH = this._mapH * s;
+		// When map is larger than screen: keep at least b px of map visible at each edge.
+		// When map fits within screen: keep it within the canvas with horizontal breathing room.
+		const minX = mapW > W ? bx - mapW : -bx;
+		const maxX = mapW > W ? W - bx    : W - mapW + bx;
+		const minY = mapH > H ? by - mapH : 0;
+		const maxY = mapH > H ? H - by    : H - mapH;
+		const clampedX = Math.max(minX, Math.min(maxX, this._view.x));
+		const clampedY = Math.max(minY, Math.min(maxY, this._view.y));
+		const hitBoundary = clampedX !== this._view.x || clampedY !== this._view.y;
+		this._view.x = clampedX;
+		this._view.y = clampedY;
+		if (withAudio) {
+			if (hitBoundary) {
+				if (!this._atPanBoundary) {
+					this._atPanBoundary = true;
+					this._mediaController?.playPortfolioItem(this._mediaController.config?.ADSR_TAB, null, 2, false);
+				}
+			} else {
+				this._atPanBoundary = false;
+			}
+		}
 	}
 
 	_onResize() {
@@ -312,6 +365,7 @@ class MuniEngine {
 		if (!this._hasMoved && (dx * dx + dy * dy > 16)) this._hasMoved = true;
 		this._view.x = this._drag.startViewX + dx;
 		this._view.y = this._drag.startViewY + dy;
+		this._clampView(true);
 		this._render();
 	}
 
@@ -385,7 +439,9 @@ class MuniEngine {
 		if (e.touches.length === 2 && this._pinch) {
 			const dist        = this._pinchDist(e.touches);
 			const ratio       = dist / this._pinch.startDist;
-			const newScale    = Math.max(MUNI_ZOOM_MIN, Math.min(MUNI_ZOOM_MAX, this._pinch.startScale * ratio));
+			const rawScale    = this._pinch.startScale * ratio;
+			const newScale    = Math.max(MUNI_ZOOM_MIN, Math.min(MUNI_ZOOM_MAX, rawScale));
+			this._checkZoomBoundary(rawScale, newScale);
 			const actualRatio = newScale / this._pinch.startScale;
 			const rect   = this.canvas.getBoundingClientRect();
 			const scaleX = this.canvas.width  / rect.width;
@@ -395,6 +451,7 @@ class MuniEngine {
 			this._view.x     = midX - actualRatio * (this._pinch.startMidX - this._pinch.startViewX);
 			this._view.y     = midY - actualRatio * (this._pinch.startMidY - this._pinch.startViewY);
 			this._view.scale = newScale;
+			this._clampView(false);
 			this._render();
 		} else if (e.touches.length === 1) {
 			const { x, y } = this._clientToCanvas(e.touches[0].clientX, e.touches[0].clientY);
@@ -416,6 +473,7 @@ class MuniEngine {
 				if (!this._hasMoved && (dx * dx + dy * dy > 16)) this._hasMoved = true;
 				this._view.x = this._drag.startViewX + dx;
 				this._view.y = this._drag.startViewY + dy;
+				this._clampView(true);
 				this._render();
 			}
 		}
@@ -544,21 +602,40 @@ class MuniEngine {
 
 	_toggleCategory(catId) {
 		this._catVisible[catId] = !this._catVisible[catId];
+		this._playToggleAudio(this._catVisible[catId]);
 		this._render();
 	}
 
 	_toggleExpand(catId) {
 		this._catExpanded[catId] = !this._catExpanded[catId];
+		this._mediaController?.playPortfolioItem(this._mediaController.config?.ADSR_PORTFOLIO, null, 1, true);
 		this._render();
 	}
 
 	_toggleRoute(lineRef) {
+		if (this._selectedRoute === lineRef) {
+			this._selectRoute(lineRef);
+			return;
+		}
 		this._routeVisible.set(lineRef, this._routeVisible.get(lineRef) === false);
+		this._playToggleAudio(this._routeVisible.get(lineRef) !== false);
 		this._render();
+	}
+
+	_playToggleAudio(isOn) {
+		if (!this._mediaController) return;
+		const cfg = this._mediaController.config;
+		if (isOn) {
+			const f = cfg.MENU_AUDIO.depth1.rootFrequency;
+			this._mediaController.playReversed({ frequencies: [f, f * (16 / 9)], adsr: cfg.ADSR_TAB });
+		} else {
+			this._mediaController.playPortfolioItem(cfg.ADSR_TAB, null, 1, false);
+		}
 	}
 
 	_toggleOverlay(id) {
 		this._overlayVisible[id] = !this._overlayVisible[id];
+		this._playToggleAudio(this._overlayVisible[id]);
 		this._render();
 	}
 
@@ -568,14 +645,17 @@ class MuniEngine {
 			this._lastSelectedRoute = this._selectedRoute;
 			this._selectedRoute = null;
 			this._dimAnim = { from: prevOpacity, to: 0, startTime: Date.now() };
+			this._mediaController?.playReversed(this._lastRouteAudioConfig);
 			this._render();
 			return;
 		}
 		this._lastSelectedRoute  = lineRef;
 		this._selectedRoute      = lineRef;
 		this._dimAnim            = { from: prevOpacity, to: 1, startTime: Date.now() };
+		if (this._routeVisible.get(lineRef) === false) this._routeVisible.set(lineRef, true);
 		this._routeStripScrollY  = 0;
 		this._stripScrollArea    = null;
+		this._lastRouteAudioConfig = this._mediaController?.playPortfolioItem(this._mediaController.config?.ADSR_PORTFOLIO, null, 2, true) ?? null;
 		if (this._lineShapes.has(lineRef)) {
 			this._fitToRoute(lineRef);
 		} else {
@@ -592,6 +672,9 @@ class MuniEngine {
 		}
 		for (const t of this._hitTargets) {
 			if (this._pointInBounds(cx, cy, t)) { t.action(); return; }
+		}
+		if (this._selectedRoute) {
+			this._selectRoute(this._selectedRoute);
 		}
 	}
 
