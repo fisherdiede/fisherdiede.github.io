@@ -36,12 +36,15 @@ const MUNI_OVERLAY_CATEGORIES = [
 
 const MUNI_POLL_INTERVAL   = 15000; // ms — SFMTA source refreshes every ~30s
 const MUNI_ANIM_DURATION   = 15000; // ms — starting animation duration (adapts to real fetch interval)
-const MUNI_RUSH_DURATION   =  3000; // ms — rush remaining animation when new data interrupts
 const MUNI_HISTORY_MAX     = 6;     // snapshots retained per vehicle
+const MUNI_MAX_ANIM_SPEED_MPS = 20; // ~45 mph — animation duration extends to keep speed at or below this limit
 const MUNI_ZOOM_MIN        = 1;
 const MUNI_ZOOM_MAX        = 20;
 const MUNI_PANEL_CAT_H  = 18; // category header row height px
 const MUNI_PANEL_ITEM_H = 22; // route row height px
+const MUNI_OB_DARKEN    = 0.33; // factor for outbound color darkening (0=none, 1=black)
+const MUNI_TERMINAL_HOLD_MS   = 10000; // ms — min time a train stays on its side after arriving at terminal
+const MUNI_TERMINAL_THRESHOLD = 0.9;   // ut fraction considered "at the terminal" (top or bottom of strip)
 
 class MuniEngine {
 	constructor(canvas) {
@@ -107,12 +110,16 @@ class MuniEngine {
 		// Static map overlay data (fetched once on start)
 		this._stopPoints        = new Map();  // stopId -> { lat, lon, name, lines: Set<lineRef> }
 		this._routeDestinations = new Map();  // `${lineRef}:${direction}` -> headsign string
-		this._lineShapes   = new Map();  // lineRef -> [[{lat,lon},...]] lazy cache, fetched on select
-		this._lineShapeTs  = new Map();  // lineRef -> precomputed cumulative-t array for canonical shape
+		this._lineShapes      = new Map();  // lineRef -> [{direction, coords:[{lat,lon},...]}] lazy cache
+		this._lineShapeTs     = new Map();  // lineRef -> precomputed cumulative-t array for canonical shape
+		this._lineCanonCoords = new Map();  // lineRef -> canonical coords normalized to IB direction (OB-terminal → IB-terminal)
 		this._overlayVisible = { stops: true };
 
 		// Selected route — shows shape + highlighted stops
-		this._selectedRoute  = null;
+		this._selectedRoute      = null;
+		this._lastSelectedRoute  = null; // retained during fade-out to drive highlight and strip
+		this._dimAnim            = { from: 0, to: 0, startTime: 0 }; // overlay fade state
+		this._terminalHolds  = new Map(); // vehicleRef -> { displayDir, heldSince, line }
 
 		// Bound handlers for clean removal
 		this._onWheel      = this._onWheel.bind(this);
@@ -179,7 +186,7 @@ class MuniEngine {
 			v.lat = v.pendingLat;
 			v.lon = v.pendingLon;
 			v.animStart = now;
-			delete v.animDuration;
+			v.animDuration = this._clampedDuration(v.fromLat, v.fromLon, v.lat, v.lon);
 			delete v.pendingLat;
 			delete v.pendingLon;
 		}
@@ -556,12 +563,17 @@ class MuniEngine {
 	}
 
 	_selectRoute(lineRef) {
+		const prevOpacity = this._dimCurrentOpacity();
 		if (this._selectedRoute === lineRef) {
+			this._lastSelectedRoute = this._selectedRoute;
 			this._selectedRoute = null;
+			this._dimAnim = { from: prevOpacity, to: 0, startTime: Date.now() };
 			this._render();
 			return;
 		}
+		this._lastSelectedRoute  = lineRef;
 		this._selectedRoute      = lineRef;
+		this._dimAnim            = { from: prevOpacity, to: 1, startTime: Date.now() };
 		this._routeStripScrollY  = 0;
 		this._stripScrollArea    = null;
 		if (this._lineShapes.has(lineRef)) {
@@ -627,6 +639,8 @@ class MuniEngine {
 			const patterns = data.journeyPatterns ?? data.JourneyPatterns ?? [];
 			const shapes = [];
 			for (const pattern of patterns) {
+				const rawDir   = pattern.DirectionRef ?? pattern.directionRef ?? '';
+				const direction = /out/i.test(rawDir) || rawDir === 'OB' ? 'OB' : 'IB';
 				const rawSeq = pattern.PointsInSequence?.StopPointInJourneyPattern
 				            ?? pattern.pointsInSequence?.StopPointInJourneyPattern;
 				if (!rawSeq) continue;
@@ -640,13 +654,19 @@ class MuniEngine {
 					const stop   = this._stopPoints.get(stopId);
 					if (!stop) continue;
 					stop.lines.add(lineRef);
+					if (!stop.lineDir) stop.lineDir = new Map();
+					if (!stop.lineDir.has(lineRef)) stop.lineDir.set(lineRef, new Set());
+					stop.lineDir.get(lineRef).add(direction);
 					coords.push({ lat: stop.lat, lon: stop.lon, stopId });
 				}
-				if (coords.length >= 2) shapes.push(coords);
+				if (coords.length >= 2) shapes.push({ direction, coords });
 			}
 			this._lineShapes.set(lineRef, shapes);
-			const canon = shapes.length > 0 ? shapes.reduce((a, b) => b.length > a.length ? b : a) : null;
-			this._lineShapeTs.set(lineRef, canon ? this._computeShapeTs(canon) : []);
+			const rawCanon = shapes.length > 0 ? shapes.reduce((a, b) => b.coords.length > a.coords.length ? b : a) : null;
+			// Normalize to IB direction so canonical always runs OB-terminal → IB-terminal
+			const canonCoords = rawCanon ? (rawCanon.direction === 'OB' ? [...rawCanon.coords].reverse() : rawCanon.coords) : null;
+			this._lineCanonCoords.set(lineRef, canonCoords ?? []);
+			this._lineShapeTs.set(lineRef, canonCoords ? this._computeShapeTs(canonCoords) : []);
 			this._render();
 			if (this._selectedRoute === lineRef) this._fitToRoute(lineRef);
 		} catch (e) {
@@ -710,25 +730,27 @@ class MuniEngine {
 					const elapsed  = now - prev.animStart;
 					const duration = prev.animDuration ?? this._avgFetchInterval;
 					if (elapsed >= duration) {
-						// Previous animation already complete — start fresh from destination
-						return { ...base, fromLat: prev.lat, fromLon: prev.lon, animStart: now };
+						// Previous animation already complete — start fresh, extending duration to cap speed
+						return { ...base, fromLat: prev.lat, fromLon: prev.lon, animStart: now, animDuration: this._clampedDuration(prev.lat, prev.lon, lat, lon) };
 					}
 
-					// Mid-animation — rush current leg to completion, then start new animation
+					// Mid-animation — complete current leg at max speed, then start new animation
 					const animPos = this._animatedPos(prev);
+					const rushDist = this._distMeters(animPos.lat, animPos.lon, prev.lat, prev.lon);
 					return {
 						...base,
-						lat:          prev.lat,       // finish rushing to the old destination
+						lat:          prev.lat,
 						lon:          prev.lon,
-						fromLat:      animPos.lat,    // from wherever the dot is right now
+						fromLat:      animPos.lat,
 						fromLon:      animPos.lon,
 						animStart:    now,
-						animDuration: MUNI_RUSH_DURATION,
-						pendingLat:   lat,            // new destination waits its turn
+						animDuration: Math.max(500, rushDist / MUNI_MAX_ANIM_SPEED_MPS * 1000),
+						pendingLat:   lat,
 						pendingLon:   lon
 					};
 				});
 
+			this._updateTerminalHolds(prevById);
 			this._updateHistory(this._vehicles);
 			this._lastUpdated = new Date();
 			this._isLoading = false;
@@ -773,9 +795,9 @@ class MuniEngine {
 		return x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
 	}
 
-	_drawVehicleDot(ctx, x, y, color) {
+	_drawVehicleDot(ctx, x, y, color, r = 2.5) {
 		ctx.beginPath();
-		ctx.arc(x, y, 2, 0, Math.PI * 2);
+		ctx.arc(x, y, r, 0, Math.PI * 2);
 		ctx.fillStyle = color;
 		ctx.fill();
 	}
@@ -802,6 +824,17 @@ class MuniEngine {
 		return name && /28th/i.test(name) && /church/i.test(name);
 	}
 
+	_distMeters(lat1, lon1, lat2, lon2) {
+		const dlat = (lat2 - lat1) * 111111;
+		const dlon = (lon2 - lon1) * 111111 * Math.cos(lat1 * Math.PI / 180);
+		return Math.sqrt(dlat * dlat + dlon * dlon);
+	}
+
+	_clampedDuration(fromLat, fromLon, toLat, toLon) {
+		const dist = this._distMeters(fromLat, fromLon, toLat, toLon);
+		return Math.max(this._avgFetchInterval, dist / MUNI_MAX_ANIM_SPEED_MPS * 1000);
+	}
+
 	_animatedPos(v) {
 		if (!v.animStart) return { lat: v.lat, lon: v.lon };
 		if (v.ref && this._animCache?.has(v.ref)) return this._animCache.get(v.ref);
@@ -821,6 +854,32 @@ class MuniEngine {
 		return MUNI_ROUTE_COLORS[prefix] ?? MUNI_ROUTE_COLORS['default'];
 	}
 
+	_darkenColor(hex, factor) {
+		const d = 1 - factor;
+		const r = parseInt(hex.slice(1, 3), 16);
+		const g = parseInt(hex.slice(3, 5), 16);
+		const b = parseInt(hex.slice(5, 7), 16);
+		return '#' + [r, g, b].map(c => Math.round(c * d).toString(16).padStart(2, '0')).join('');
+	}
+
+	_routeColorDir(line, direction) {
+		const base = this._routeColor(line);
+		return direction === 'OB' ? this._darkenColor(base, MUNI_OB_DARKEN) : base;
+	}
+
+	_displayDir(v) {
+		if (!v?.ref) return v?.direction ?? null;
+		const hold = this._terminalHolds.get(v.ref);
+		return (hold?.line === v.line) ? hold.displayDir : v.direction;
+	}
+
+	_dimCurrentOpacity() {
+		const { from, to, startTime } = this._dimAnim;
+		const t = Math.min(1, (Date.now() - startTime) / 200);
+		const e = t * t * (3 - 2 * t); // smoothstep
+		return from + (to - from) * e;
+	}
+
 	_animateToView(target, duration = 700) {
 		this._viewAnim = { from: { ...this._view }, to: target, startTime: Date.now(), duration };
 	}
@@ -834,12 +893,31 @@ class MuniEngine {
 		};
 	}
 
+	_updateTerminalHolds(prevById) {
+		const now = Date.now();
+		for (const v of this._vehicles) {
+			if (!v.ref) continue;
+			const prev = prevById.get(v.ref);
+			if (prev?.direction && v.direction && prev.direction !== v.direction) {
+				this._terminalHolds.set(v.ref, { displayDir: prev.direction, heldSince: now, line: v.line });
+			}
+		}
+		const activeRefs = new Set(this._vehicles.map(v => v.ref).filter(Boolean));
+		for (const [ref, hold] of this._terminalHolds) {
+			if (!activeRefs.has(ref)) { this._terminalHolds.delete(ref); continue; }
+			// For non-selected routes the strip won't run the blocking check, so expire by time alone
+			if (hold.line !== this._selectedRoute && now - hold.heldSince >= MUNI_TERMINAL_HOLD_MS) {
+				this._terminalHolds.delete(ref);
+			}
+		}
+	}
+
 	_computeRouteBounds(lineRef) {
 		const segments = this._lineShapes.get(lineRef);
 		if (!segments || segments.length === 0) return null;
 		let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 		for (const seg of segments)
-			for (const pt of seg) {
+			for (const pt of seg.coords) {
 				const { x, y } = this._project(pt.lat, pt.lon);
 				if (x < minX) minX = x; if (x > maxX) maxX = x;
 				if (y < minY) minY = y; if (y > maxY) maxY = y;
@@ -850,13 +928,24 @@ class MuniEngine {
 	_fitToRoute(lineRef) {
 		const bounds = this._computeRouteBounds(lineRef);
 		if (!bounds) return;
-		const w = this.canvas.width, h = this.canvas.height, pad = 80;
+		const w = this.canvas.width, h = this.canvas.height;
 		const worldW = bounds.maxX - bounds.minX, worldH = bounds.maxY - bounds.minY;
 		if (worldW < 1 || worldH < 1) return;
+
+		const leftEdge  = (this._stripPanelRight  ?? 0)      + 16;
+		const rightEdge = (this._panelBackdropL   ?? w)      - 16;
+		const vPad      = 20;
+		const availW    = Math.max(40, rightEdge - leftEdge);
+		const availH    = Math.max(40, h - 2 * vPad);
+
 		const scale = Math.max(MUNI_ZOOM_MIN, Math.min(MUNI_ZOOM_MAX,
-			Math.min((w - 2 * pad) / worldW, (h - 2 * pad) / worldH)));
-		const cx = (bounds.minX + bounds.maxX) / 2, cy = (bounds.minY + bounds.maxY) / 2;
-		this._animateToView({ scale, x: w / 2 - cx * scale, y: h / 2 - cy * scale });
+			Math.min(availW / worldW, availH / worldH)));
+
+		const cx = (bounds.minX + bounds.maxX) / 2;
+		const cy = (bounds.minY + bounds.maxY) / 2;
+		const centerX = leftEdge + availW / 2;
+		const centerY = vPad + availH / 2;
+		this._animateToView({ scale, x: centerX - cx * scale, y: centerY - cy * scale });
 	}
 
 	_computeShapeTs(shape) {
@@ -900,16 +989,17 @@ class MuniEngine {
 	}
 
 	_drawRouteStrip(ctx, lineRef) {
-		const color  = this._routeColor(lineRef);
-		const shapes = this._lineShapes.get(lineRef) ?? [];
-		const canon  = shapes.length > 0 ? shapes.reduce((a, b) => b.length > a.length ? b : a) : null;
+		const color   = this._routeColor(lineRef);
+		const colorOB = this._routeColorDir(lineRef, 'OB');
+		const canonCoords = this._lineCanonCoords.get(lineRef) ?? null;
+		const canon = canonCoords?.length ? { coords: canonCoords } : null;
 
 		// Terminal destination labels — used for first/last stop in the list
 		const ibDest = (this._routeDestinations.get(`${lineRef}:IB`)
-			?? this._stopPoints.get(canon?.[0]?.stopId)?.name
+			?? this._stopPoints.get(canon?.coords?.[canon.coords.length - 1]?.stopId)?.name
 			?? 'INBOUND').toUpperCase();
 		const obDest = (this._routeDestinations.get(`${lineRef}:OB`)
-			?? this._stopPoints.get(canon?.[canon?.length - 1]?.stopId)?.name
+			?? this._stopPoints.get(canon?.coords?.[0]?.stopId)?.name
 			?? 'OUTBOUND').toUpperCase();
 		this._stripHitTargets = [];
 		const panelLeft = 8;
@@ -933,11 +1023,13 @@ class MuniEngine {
 			const name = this._stopPoints.get(stopId)?.name ?? '';
 			if (name) maxNameW = Math.max(maxNameW, ctx.measureText(name).width);
 		}
+		ctx.font = `${nameFontSz + 2}px Courier New`;
 		maxNameW = Math.max(maxNameW, ctx.measureText(ibDest).width, ctx.measureText(obDest).width);
 		ctx.font = 'bold 18px Courier New';
 		maxNameW = Math.max(maxNameW, ctx.measureText(lineRef).width);
 
-		const panelW   = Math.max(160, Math.min(400, Math.ceil(maxNameW) + outerPad * 2 + 8));
+		const panelW   = Math.max(160, Math.min(400, Math.ceil(maxNameW) + outerPad * 2 + 20));
+		this._stripPanelRight = panelLeft + panelW;
 		const xIB      = panelLeft + outerPad;
 		const xOB      = panelLeft + panelW - outerPad;
 		const xCenter  = panelLeft + panelW / 2;
@@ -955,8 +1047,10 @@ class MuniEngine {
 			this._routeStripScrollY = 0;
 		}
 
-		ctx.fillStyle = 'rgba(0,0,0,0.6)';
-		ctx.fillRect(panelLeft, 8, panelW, panelH);
+		ctx.fillStyle = '#000';
+		ctx.beginPath();
+		ctx.roundRect(panelLeft, 8, panelW, panelH, 8);
+		ctx.fill();
 
 		const textColor = '#fff';
 
@@ -969,6 +1063,48 @@ class MuniEngine {
 		ctx.font = '11px Courier New';
 		ctx.fillStyle = 'rgba(255,255,255,0.55)';
 		ctx.fillText(`${stats.total} vehicles online`, xCenter, 42);
+
+		// Pre-compute vehicle positions and resolve terminal-hold display directions
+		const vehicleData = [];
+		if (canon) {
+			const now = Date.now();
+			for (const v of this._vehicles) {
+				if (v.line !== lineRef) continue;
+				const pos = this._animatedPos(v);
+				const dt  = this._projectOntoShape(pos.lat, pos.lon, canon.coords);
+				let ut = dt;
+				if (stopTs.length >= 2) {
+					for (let i = 1; i < stopTs.length; i++) {
+						if (dt <= stopTs[i].t || i === stopTs.length - 1) {
+							const s0 = stopTs[i - 1].t, s1 = stopTs[i].t;
+							const frac = s1 > s0 ? Math.max(0, Math.min(1, (dt - s0) / (s1 - s0))) : 0;
+							ut = (i - 1 + frac) / numSegs;
+							break;
+						}
+					}
+				}
+				const hold = this._terminalHolds.get(v.ref);
+				const displayDir = (hold?.line === lineRef) ? hold.displayDir : v.direction;
+				vehicleData.push({ v, ut, displayDir });
+			}
+			// Expire holds that timed out and aren't blocked by an opposing train
+			for (const entry of vehicleData) {
+				const hold = this._terminalHolds.get(entry.v.ref);
+				if (!hold || hold.line !== lineRef) continue;
+				if (now - hold.heldSince < MUNI_TERMINAL_HOLD_MS) continue;
+				const atIBTerminal = hold.displayDir === 'IB';
+				const blocked = vehicleData.some(({ v: other, ut: otherUt, displayDir: otherDir }) =>
+					other.ref !== entry.v.ref &&
+					(atIBTerminal
+						? otherDir === 'OB' && otherUt > MUNI_TERMINAL_THRESHOLD
+						: otherDir === 'IB' && otherUt < 1 - MUNI_TERMINAL_THRESHOLD)
+				);
+				if (!blocked) {
+					this._terminalHolds.delete(entry.v.ref);
+					entry.displayDir = entry.v.direction;
+				}
+			}
+		}
 
 		// ── Clipped strip content ──
 		ctx.save();
@@ -989,20 +1125,21 @@ class MuniEngine {
 		const showNames = rowH >= 9;
 		if (showNames) ctx.font = `${nameFontSz}px Courier New`;
 
+		const stopTsRev = [...stopTs].reverse();
 		for (let si = 0; si < stopTs.length; si++) {
-			const { stopId } = stopTs[si];
+			const { stopId } = stopTsRev[si];
 			const sy = stripTop + (si / numSegs) * stripH;
 			ctx.fillStyle = 'rgba(255,255,255,0.4)';
 			ctx.beginPath();
-			ctx.moveTo(xIB,     sy - 3);
-			ctx.lineTo(xIB - 3, sy + 2);
-			ctx.lineTo(xIB + 3, sy + 2);
+			ctx.moveTo(xIB,     sy + 3);
+			ctx.lineTo(xIB - 3, sy - 2);
+			ctx.lineTo(xIB + 3, sy - 2);
 			ctx.closePath();
 			ctx.fill();
 			ctx.beginPath();
-			ctx.moveTo(xOB,     sy + 3);
-			ctx.lineTo(xOB - 3, sy - 2);
-			ctx.lineTo(xOB + 3, sy - 2);
+			ctx.moveTo(xOB,     sy - 3);
+			ctx.lineTo(xOB - 3, sy + 2);
+			ctx.lineTo(xOB + 3, sy + 2);
 			ctx.closePath();
 			ctx.fill();
 			if (showNames) {
@@ -1010,9 +1147,14 @@ class MuniEngine {
 				           : si === numSegs ? obDest
 				           : (this._stopPoints.get(stopId)?.name ?? '');
 				if (name) {
+					const isTerminal = si === 0 || si === numSegs;
+					const labelColor = si === 0 ? color : si === numSegs ? colorOB : textColor;
+					const labelSz    = isTerminal ? nameFontSz + 2 : nameFontSz;
+					ctx.font      = `${labelSz}px Courier New`;
 					ctx.textAlign = 'center';
-					ctx.fillStyle = textColor;
-					ctx.fillText(name, xCenter, sy + nameFontSz * 0.35);
+					ctx.fillStyle = labelColor;
+					ctx.fillText(name, xCenter, sy + labelSz * 0.35);
+					ctx.font = `${nameFontSz}px Courier New`;
 				}
 			}
 		}
@@ -1024,27 +1166,16 @@ class MuniEngine {
 			ctx.fillText('loading…', xCenter, stripTop + 14);
 		}
 
-		// Vehicle markers projected onto the canonical shape
-		if (canon) {
-			for (const v of this._vehicles) {
-				if (v.line !== lineRef) continue;
-				const pos = this._animatedPos(v);
-				const dt  = this._projectOntoShape(pos.lat, pos.lon, canon);
-				let ut = dt;
-				if (stopTs.length >= 2) {
-					for (let i = 1; i < stopTs.length; i++) {
-						if (dt <= stopTs[i].t || i === stopTs.length - 1) {
-							const s0 = stopTs[i - 1].t, s1 = stopTs[i].t;
-							const frac = s1 > s0 ? Math.max(0, Math.min(1, (dt - s0) / (s1 - s0))) : 0;
-							ut = (i - 1 + frac) / numSegs;
-							break;
-						}
-					}
-				}
-				const vy  = stripTop + ut * stripH;
-				const vx  = v.direction === 'IB' ? xOB : xIB;
-				this._drawVehicleDot(ctx, vx, vy, color);
-			}
+		// Vehicle markers — two-pass: compute positions + apply terminal holds, then draw
+		for (const { ut, displayDir } of vehicleData) {
+			const vy  = stripTop + (1 - ut) * stripH;
+			const vx  = displayDir === 'IB' ? xIB : xOB;
+			const vc  = this._routeColorDir(lineRef, displayDir);
+			ctx.shadowColor = vc;
+			ctx.shadowBlur  = 32;
+			this._drawVehicleDot(ctx, vx, vy, vc, 5);
+			ctx.shadowBlur  = 0;
+			ctx.shadowColor = 'transparent';
 		}
 
 		ctx.restore(); // end clip
@@ -1081,6 +1212,7 @@ class MuniEngine {
 		if (this._isLoading) return;
 
 		this._animCache = new Map();
+		const dimOpacity = this._dimCurrentOpacity();
 
 		// ── World-space drawing (affected by pan/zoom) ──
 		ctx.save();
@@ -1090,92 +1222,194 @@ class MuniEngine {
 		ctx.lineJoin = 'round';
 		ctx.lineCap  = 'round';
 
-		// ── Selected route shape (behind trails) ──
-		if (this._selectedRoute) {
-			const segments = this._lineShapes.get(this._selectedRoute) ?? [];
-			const color    = this._routeColor(this._selectedRoute);
-			ctx.strokeStyle = color;
-			ctx.lineWidth   = 0.25;
-			ctx.globalAlpha = 0.7;
-			for (const seg of segments) {
-				if (seg.length < 2) continue;
-				ctx.beginPath();
-				const p0 = this._project(seg[0].lat, seg[0].lon);
-				ctx.moveTo(p0.x, p0.y);
-				for (let i = 1; i < seg.length; i++) {
-					const p = this._project(seg[i].lat, seg[i].lon);
-					ctx.lineTo(p.x, p.y);
-				}
-				ctx.stroke();
-			}
-			ctx.globalAlpha = 1.0;
-		}
-
-		// ── Stop overlays ──
-		if (this._overlayVisible.stops && this._stopPoints.size > 0) {
-			const sel = this._selectedRoute;
-			for (const [, stop] of this._stopPoints) {
-				if (stop.lines.size > 0 && ![...stop.lines].some(l => this._isVisible(l))) continue;
-				const onSelected = sel && stop.lines.has(sel);
-				const { x, y } = this._project(stop.lat, stop.lon);
-				if (this._isHeartStop(stop.name) && stop.lines.has('J')) {
-					this._drawHeart(ctx, x, y, 0.95);
-					ctx.fillStyle = onSelected ? this._routeColor(sel) : 'rgba(255,255,255,0.5)';
-				} else {
-					ctx.beginPath();
-					ctx.arc(x, y, 0.66, 0, Math.PI * 2);
-					ctx.fillStyle = onSelected ? this._routeColor(sel) : 'rgba(255,255,255,0.5)';
-				}
-				ctx.fill();
-			}
-		}
-
+		const sel          = this._selectedRoute;
 		const vehicleByRef = new Map(this._vehicles.map(v => [v.ref, v]));
+		const trailNow     = Date.now();
+		const trailMaxAge  = this._avgFetchInterval * MUNI_HISTORY_MAX;
 
-		const trailNow    = Date.now();
-		const trailMaxAge = this._avgFetchInterval * MUNI_HISTORY_MAX;
-
-		for (const [ref, trail] of this._history) {
-			if (trail.length < 1) continue;
-			if (!this._isVisible(trail[trail.length - 1].line)) continue;
-
-			const color = this._routeColor(trail[trail.length - 1].line);
-
-			// Append current animated position as the trail head so it follows the dot live
-			const v    = vehicleByRef.get(ref);
-			const head = v ? this._animatedPos(v) : { lat: trail[trail.length - 1].lat, lon: trail[trail.length - 1].lon };
-			const pts  = [
+		const drawTrail = (ref, trail) => {
+			const v     = vehicleByRef.get(ref);
+			const color = this._routeColorDir(trail[trail.length - 1].line, this._displayDir(v));
+			const head  = v ? this._animatedPos(v) : { lat: trail[trail.length - 1].lat, lon: trail[trail.length - 1].lon };
+			const pts   = [
 				...trail.map(p => ({ ...this._project(p.lat, p.lon), t: p.t ?? trailNow })),
 				{ ...this._project(head.lat, head.lon), t: trailNow }
 			];
+			if (pts.length < 2) return;
+			const aTail = Math.max(0, (1 - (trailNow - pts[0].t) / trailMaxAge) * 0.75);
+			const grad  = ctx.createLinearGradient(pts[0].x, pts[0].y, pts[pts.length - 1].x, pts[pts.length - 1].y);
+			grad.addColorStop(0, color + this._toHex(aTail));
+			grad.addColorStop(1, color + this._toHex(0.75));
+			ctx.beginPath();
+			ctx.moveTo(pts[0].x, pts[0].y);
+			for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+			ctx.lineWidth   = 2;
+			ctx.strokeStyle = grad;
+			ctx.stroke();
+		};
 
-			ctx.lineWidth = 2;
-			for (let i = 1; i < pts.length; i++) {
-				const a0 = (1 - (trailNow - pts[i - 1].t) / trailMaxAge) * 0.75;
-				const a1 = (1 - (trailNow - pts[i].t)     / trailMaxAge) * 0.75;
-				const grad = ctx.createLinearGradient(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y);
-				grad.addColorStop(0, color + this._toHex(a0));
-				grad.addColorStop(1, color + this._toHex(a1));
-				ctx.beginPath();
-				ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
-				ctx.lineTo(pts[i].x, pts[i].y);
-				ctx.strokeStyle = grad;
+		const drawStop = (stop, x, y, colorOverride) => {
+			const color = colorOverride ?? ((sel && stop.lines.has(sel)) ? this._routeColor(sel) : 'rgba(255,255,255,0.5)');
+			if (this._isHeartStop(stop.name) && stop.lines.has('J')) {
+				this._drawHeart(ctx, x, y, 1.25);
+				ctx.fillStyle = color;
+				ctx.fill();
+				ctx.save();
+				ctx.shadowBlur  = 0;
+				ctx.shadowColor = 'transparent';
+				ctx.lineWidth   = 0.15;
+				ctx.strokeStyle = 'rgba(0,0,0,0.85)';
 				ctx.stroke();
+				ctx.restore();
+			} else {
+				ctx.beginPath();
+				ctx.arc(x, y, 0.75, 0, Math.PI * 2);
+				ctx.fillStyle = color;
+				ctx.fill();
+			}
+		};
+
+		// ── 1. Unselected vehicle trails ──
+		for (const [ref, trail] of this._history) {
+			if (trail.length < 1) continue;
+			const line = trail[trail.length - 1].line;
+			if (!this._isVisible(line) || line === sel) continue;
+			drawTrail(ref, trail);
+		}
+
+		// ── 2. Unselected stops ──
+		if (this._overlayVisible.stops && this._stopPoints.size > 0) {
+			for (const [, stop] of this._stopPoints) {
+				if (stop.lines.size > 0 && ![...stop.lines].some(l => this._isVisible(l))) continue;
+				if (sel && stop.lines.has(sel)) continue;
+				const { x, y } = this._project(stop.lat, stop.lon);
+				drawStop(stop, x, y);
 			}
 		}
 
+		// ── 3. Unselected vehicles — OB first, IB on top ──
 		for (const v of this._vehicles) {
-			if (!this._isVisible(v.line)) continue;
-			const pos = this._animatedPos(v);
+			if (!this._isVisible(v.line) || v.line === sel || this._displayDir(v) !== 'OB') continue;
+			const pos   = this._animatedPos(v);
 			const { x, y } = this._project(pos.lat, pos.lon);
-			const color = this._routeColor(v.line);
-			this._drawVehicleDot(ctx, x, y, color);
+			this._drawVehicleDot(ctx, x, y, this._routeColorDir(v.line, this._displayDir(v)));
+		}
+		for (const v of this._vehicles) {
+			if (!this._isVisible(v.line) || v.line === sel || this._displayDir(v) !== 'IB') continue;
+			const pos   = this._animatedPos(v);
+			const { x, y } = this._project(pos.lat, pos.lon);
+			this._drawVehicleDot(ctx, x, y, this._routeColorDir(v.line, this._displayDir(v)));
+		}
+
+		// ── 4–7. Selected route — drawn on top of everything, all with glow ──
+		if (dimOpacity > 0.001) {
+			ctx.save();
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.fillStyle = `rgba(0,0,0,${(dimOpacity * 0.5).toFixed(3)})`;
+			ctx.fillRect(0, 0, w, h);
+			ctx.restore();
+		}
+		if (sel) {
+			const color   = this._routeColor(sel);
+			const colorOB = this._routeColorDir(sel, 'OB');
+
+			// 4. Route shape — OB first, IB on top
+			const segments = this._lineShapes.get(sel) ?? [];
+			ctx.lineWidth = 0.33;
+			for (const pass of ['OB', 'IB']) {
+				for (const { direction, coords } of segments) {
+					if (direction !== pass || coords.length < 2) continue;
+					const sc = this._routeColorDir(sel, direction);
+					ctx.strokeStyle = sc;
+					ctx.shadowColor = sc;
+					ctx.shadowBlur  = 8;
+					const drawSeg = () => {
+						ctx.beginPath();
+						const p0 = this._project(coords[0].lat, coords[0].lon);
+						ctx.moveTo(p0.x, p0.y);
+						for (let i = 1; i < coords.length; i++) {
+							const p = this._project(coords[i].lat, coords[i].lon);
+							ctx.lineTo(p.x, p.y);
+						}
+						ctx.stroke();
+					};
+					drawSeg();
+					drawSeg();
+				}
+			}
+			ctx.shadowBlur  = 0;
+			ctx.shadowColor = 'transparent';
+
+			// 5. Selected stops — OB first, IB on top
+			if (this._overlayVisible.stops && this._stopPoints.size > 0) {
+				ctx.shadowBlur  = 8;
+				for (const pass of ['OB', 'IB']) {
+					for (const [, stop] of this._stopPoints) {
+						if (!stop.lines.has(sel)) continue;
+						const dirs = stop.lineDir?.get(sel);
+						const isOBOnly = dirs?.size === 1 && dirs.has('OB');
+						if (pass === 'OB' && !isOBOnly) continue;
+						if (pass === 'IB' && isOBOnly) continue;
+						const { x, y } = this._project(stop.lat, stop.lon);
+						const stopColor = isOBOnly ? colorOB : color;
+						ctx.shadowColor = stopColor;
+						drawStop(stop, x, y, stopColor);
+					}
+				}
+				ctx.shadowBlur  = 0;
+				ctx.shadowColor = 'transparent';
+			}
+
+			// 6. Selected vehicle trails — OB first, IB on top
+			ctx.shadowBlur  = 8;
+			for (const [ref, trail] of this._history) {
+				if (trail.length < 1 || trail[trail.length - 1].line !== sel) continue;
+				const tv = vehicleByRef.get(ref);
+				if (this._displayDir(tv) !== 'OB') continue;
+				ctx.shadowColor = this._routeColorDir(sel, this._displayDir(tv));
+				drawTrail(ref, trail);
+			}
+			for (const [ref, trail] of this._history) {
+				if (trail.length < 1 || trail[trail.length - 1].line !== sel) continue;
+				const tv = vehicleByRef.get(ref);
+				if (this._displayDir(tv) !== 'IB') continue;
+				ctx.shadowColor = this._routeColorDir(sel, this._displayDir(tv));
+				drawTrail(ref, trail);
+			}
+			ctx.shadowBlur  = 0;
+			ctx.shadowColor = 'transparent';
+
+			// 7. Selected vehicles — OB first, IB on top
+			ctx.shadowBlur  = 32;
+			for (const v of this._vehicles) {
+				if (v.line !== sel || this._displayDir(v) !== 'OB') continue;
+				const vc = this._routeColorDir(sel, this._displayDir(v));
+				ctx.shadowColor = vc;
+				const pos   = this._animatedPos(v);
+				const { x, y } = this._project(pos.lat, pos.lon);
+				this._drawVehicleDot(ctx, x, y, vc);
+			}
+			for (const v of this._vehicles) {
+				if (v.line !== sel || this._displayDir(v) !== 'IB') continue;
+				const vc = this._routeColorDir(sel, this._displayDir(v));
+				ctx.shadowColor = vc;
+				const pos   = this._animatedPos(v);
+				const { x, y } = this._project(pos.lat, pos.lon);
+				this._drawVehicleDot(ctx, x, y, vc);
+			}
+			ctx.shadowBlur  = 0;
+			ctx.shadowColor = 'transparent';
 		}
 
 		ctx.restore(); // ── End world-space transform ──
 
 		// ── Route strip panel — top-left, shown when route selected ──
-		if (this._selectedRoute) this._drawRouteStrip(ctx, this._selectedRoute);
+		const stripRoute = this._selectedRoute ?? (this._dimAnim.to === 0 ? this._lastSelectedRoute : null);
+		if (dimOpacity > 0.001 && stripRoute) {
+			ctx.globalAlpha = dimOpacity;
+			this._drawRouteStrip(ctx, stripRoute);
+			ctx.globalAlpha = 1;
+		}
 
 		// ── HUD — bottom-right ──
 		ctx.font = '14px Courier New';
@@ -1193,12 +1427,12 @@ class MuniEngine {
 		}
 
 		// ── Route visibility panel (top-right) ──
-		this._drawPanel();
+		this._drawPanel(dimOpacity);
 	}
 
 	// ── Panel ─────────────────────────────────────────────────────────────────
 
-	_drawPanel() {
+	_drawPanel(dimOpacity) {
 		const ctx   = this.ctx;
 		const w     = this.canvas.width;
 		const dotX  = w - 16;  // visibility dot right edge
@@ -1241,8 +1475,12 @@ class MuniEngine {
 
 		// Backdrop — snug around content, symmetric top/bottom padding (8px)
 		const backdropL = minX - 10;
-		ctx.fillStyle = 'rgba(0,0,0,0.5)';
-		ctx.fillRect(backdropL, 8, w - 10 - backdropL, lastContentBottom);
+		this._panelBackdropL = backdropL;
+		const backdropW = w - 10 - backdropL;
+		ctx.fillStyle = '#000';
+		ctx.beginPath();
+		ctx.roundRect(backdropL, 8, backdropW, lastContentBottom, 8);
+		ctx.fill();
 
 		ctx.textAlign = 'right';
 		ctx.font = '16px Courier New';
@@ -1295,17 +1533,36 @@ class MuniEngine {
 					const routeOn   = this._routeVisible.get(lineRef) !== false;
 					const effective = visible && routeOn;
 					const selected  = this._selectedRoute === lineRef;
+					const fadingOut = !selected && lineRef === this._lastSelectedRoute && this._dimAnim.to === 0;
+					const highlightOpacity = (selected || fadingOut) ? dimOpacity : 0;
 					const color     = this._routeColor(lineRef);
+
+					// Selection border
+					if (highlightOpacity > 0.001) {
+						ctx.save();
+						ctx.globalAlpha *= highlightOpacity;
+						ctx.strokeStyle = color;
+						ctx.lineWidth   = 1.5;
+						ctx.beginPath();
+						ctx.roundRect(backdropL + 2, rowTop + 2, backdropW - 4, MUNI_PANEL_ITEM_H - 4, 4);
+						ctx.stroke();
+						ctx.restore();
+					}
 
 					// Dot — toggles visibility
 					ctx.fillStyle = effective ? color : color + '3a';
 					ctx.fillText(routeOn ? '●' : '○', dotX, baseline);
 
-					// Label — highlighted when route is selected
-					ctx.fillStyle = selected  ? color
-					              : effective ? 'rgba(255,255,255,0.7)'
-					              :             'rgba(255,255,255,0.25)';
+					// Label — fade between unselected and route color based on highlight opacity
+					ctx.fillStyle = effective ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.25)';
 					ctx.fillText(lineRef, lblX, baseline);
+					if (highlightOpacity > 0.001) {
+						ctx.save();
+						ctx.globalAlpha *= highlightOpacity;
+						ctx.fillStyle = color;
+						ctx.fillText(lineRef, lblX, baseline);
+						ctx.restore();
+					}
 
 					if (rowTop >= clipTop && rowBot <= clipBot) {
 						// Dot hit: toggle visibility
