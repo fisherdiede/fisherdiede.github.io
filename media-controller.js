@@ -194,6 +194,63 @@ class MediaController {
 	}
 
 	/**
+	 * Activate GGR Charts fullscreen image scroll
+	 */
+	activateGGRChartsMode() {
+		const images = [
+			'1 - great green room:bandit.jpeg',
+			'2 - muddy rIver.jpeg',
+			'3 - extras.jpeg',
+			'4 - episodes.jpeg',
+			'5 - reruns.jpeg',
+			'6 - washed in white.jpeg',
+			'7 - yellow roses.jpeg',
+			'8 - new moon:goodnight moon.png',
+			'close to you.jpeg'
+		].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+		const overlay = document.createElement('div');
+		overlay.id = 'ggr-charts-overlay';
+		overlay.style.position = 'fixed';
+		overlay.style.top = '0';
+		overlay.style.left = '0';
+		overlay.style.width = '100%';
+		overlay.style.height = '100%';
+		overlay.style.zIndex = '100';
+		overlay.style.backgroundColor = '#000';
+		overlay.style.overflowY = 'auto';
+		overlay.style.webkitOverflowScrolling = 'touch';
+		overlay.style.opacity = '0';
+		overlay.style.transition = 'opacity 0.4s ease';
+
+		const basePath = 'assets/visual/' + encodeURIComponent('ggr charts') + '/';
+		images.forEach(filename => {
+			const img = document.createElement('img');
+			img.src = basePath + encodeURIComponent(filename);
+			img.style.display = 'block';
+			img.style.width = '100%';
+			img.style.height = 'auto';
+			overlay.appendChild(img);
+		});
+
+		document.body.appendChild(overlay);
+		requestAnimationFrame(() => { overlay.style.opacity = '1'; });
+		this._ggrChartsOverlay = overlay;
+	}
+
+	/**
+	 * Deactivate GGR Charts mode and clean up
+	 */
+	deactivateGGRChartsMode() {
+		if (!this._ggrChartsOverlay) return;
+		const overlay = this._ggrChartsOverlay;
+		overlay.style.transition = 'opacity 0.4s ease';
+		overlay.style.opacity = '0';
+		setTimeout(() => { overlay.remove(); }, 400);
+		this._ggrChartsOverlay = null;
+	}
+
+	/**
 	 * Deactivate MUNI mode and clean up
 	 */
 	deactivateMuniMode() {

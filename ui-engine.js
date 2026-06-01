@@ -991,6 +991,10 @@ class UIEngine {
 			this.mediaController.deactivateMuniMode();
 		}
 
+		if (closingEntry.itemName === 'GGR charts') {
+			this.mediaController.deactivateGGRChartsMode();
+		}
+
 		// Hide and remove the closing container (null for null menus, so this is skipped)
 		if (closingContainer) {
 			closingContainer.style('opacity', '0');
@@ -1149,7 +1153,7 @@ class UIEngine {
 				}
 			}
 
-			const isActionable = hasSubmenu || subItem === 'biebl' || subItem === '7LW' || isVaultSong;
+			const isActionable = hasSubmenu || subItem === 'biebl' || subItem === '7LW' || subItem === 'GGR charts' || isVaultSong;
 			const adsr = isActionable ? this.config.ADSR_PORTFOLIO : this.config.ADSR_TAB;
 
 			// Use stored audio config from hover if available
@@ -1174,6 +1178,14 @@ class UIEngine {
 				// Play YouTube video
 				this.mediaController.playYouTubeVideo('https://www.youtube.com/watch?v=od6DMd3sP4s&list=RDod6DMd3sP4s&start_radio=1');
 				// Start menu auto-hide timer
+				this._resetMenuAutoHideTimer();
+				return;
+			}
+
+			// Check if this is "GGR charts" - open fullscreen image scroll
+			if (subItem === 'GGR charts') {
+				this._openPortfolioSection(subItem, audioConfig, true); // true = isNullMenu
+				this.mediaController.activateGGRChartsMode();
 				this._resetMenuAutoHideTimer();
 				return;
 			}
@@ -1273,7 +1285,7 @@ class UIEngine {
 			}
 
 			// Actionable items open submenus or trigger special modes (biebl, 7LW, vault songs)
-			const isActionable = hasSubmenu || itemName === 'biebl' || itemName === '7LW' || itemName === 'muni' || isVaultSong;
+			const isActionable = hasSubmenu || itemName === 'biebl' || itemName === '7LW' || itemName === 'muni' || itemName === 'GGR charts' || isVaultSong;
 			const adsr = isActionable ? this.config.ADSR_PORTFOLIO : this.config.ADSR_TAB;
 
 			// Get audio config for this depth
@@ -1549,6 +1561,9 @@ class UIEngine {
 
 		// Stop all active audio and visuals
 		this.mediaController.stopAll();
+
+		// Deactivate any bespoke fullscreen modes
+		this.mediaController.deactivateGGRChartsMode();
 	}
 
 	/**
