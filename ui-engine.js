@@ -995,6 +995,10 @@ class UIEngine {
 			this.mediaController.deactivateGGRChartsMode();
 		}
 
+		if (closingEntry.itemName === 'simon') {
+			this.mediaController.deactivateSimonMode();
+		}
+
 		// Hide and remove the closing container (null for null menus, so this is skipped)
 		if (closingContainer) {
 			closingContainer.style('opacity', '0');
@@ -1089,7 +1093,7 @@ class UIEngine {
 
 			// Play portfolio item audio
 			// Use short ADSR for leaf items, wah-like ADSR for items with submenus
-			const isActionable = hasSubmenu || item === 'muni';
+			const isActionable = hasSubmenu || item === 'muni' || item === 'simon';
 			const adsr = isActionable ? this.config.ADSR_PORTFOLIO : this.config.ADSR_TAB;
 
 			// Use stored audio config from hover if available
@@ -1110,6 +1114,15 @@ class UIEngine {
 				this.mediaController.stopAllHoverAudio();
 				this._openPortfolioSection(item, audioConfig, true); // null menu
 				this.mediaController.activateMuniMode();
+			}
+
+			// Simon - Arduino Simon project page
+			if (item === 'simon') {
+				event.target.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+				event.target.style.filter = 'brightness(1)';
+				this.mediaController.stopAllHoverAudio();
+				this._openPortfolioSection(item, audioConfig, true); // null menu
+				this.mediaController.activateSimonMode();
 			}
 		};
 	}
@@ -1285,7 +1298,7 @@ class UIEngine {
 			}
 
 			// Actionable items open submenus or trigger special modes (biebl, 7LW, vault songs)
-			const isActionable = hasSubmenu || itemName === 'biebl' || itemName === '7LW' || itemName === 'muni' || itemName === 'GGR charts' || isVaultSong;
+			const isActionable = hasSubmenu || itemName === 'biebl' || itemName === '7LW' || itemName === 'muni' || itemName === 'GGR charts' || itemName === 'simon' || isVaultSong;
 			const adsr = isActionable ? this.config.ADSR_PORTFOLIO : this.config.ADSR_TAB;
 
 			// Get audio config for this depth
@@ -1378,6 +1391,13 @@ class UIEngine {
 
 		wrapperEl.addEventListener('touchmove', (e) => {
 			e.preventDefault();
+			const simonOverlay = document.getElementById('simon-overlay');
+			if (simonOverlay) {
+				const dy = this._scrollLastY - e.touches[0].clientY;
+				simonOverlay.scrollTop += dy;
+				this._scrollLastY = e.touches[0].clientY;
+				return;
+			}
 			const dy = this._scrollTouchStartY - e.touches[0].clientY;
 			if (!this._scrollDragging && Math.abs(dy) > 5) this._scrollDragging = true;
 			if (!this._scrollDragging) return;
@@ -1399,6 +1419,11 @@ class UIEngine {
 
 		wrapperEl.addEventListener('wheel', (e) => {
 			e.preventDefault();
+			const simonOverlay = document.getElementById('simon-overlay');
+			if (simonOverlay) {
+				simonOverlay.scrollTop += e.deltaY;
+				return;
+			}
 			if (this._scrollMomentumFrame) {
 				cancelAnimationFrame(this._scrollMomentumFrame);
 				this._scrollMomentumFrame = null;
@@ -1564,6 +1589,7 @@ class UIEngine {
 
 		// Deactivate any bespoke fullscreen modes
 		this.mediaController.deactivateGGRChartsMode();
+		this.mediaController.deactivateSimonMode();
 	}
 
 	/**

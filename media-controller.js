@@ -927,6 +927,85 @@ class MediaController {
 	}
 
 	/**
+	 * Activate Simon project page — centered video (7LW-style) with scrollable description
+	 */
+	activateSimonMode() {
+		const margin = 40;
+		const vw = window.innerWidth;
+		const vh = window.innerHeight;
+
+		const overlay = document.createElement('div');
+		overlay.id = 'simon-overlay';
+		overlay.style.position = 'fixed';
+		overlay.style.top = '0';
+		overlay.style.left = '0';
+		overlay.style.width = '100%';
+		overlay.style.height = '100%';
+		overlay.style.zIndex = '100';
+		overlay.style.overflowY = 'auto';
+		overlay.style.webkitOverflowScrolling = 'touch';
+		overlay.style.opacity = '0';
+		overlay.style.transition = `opacity ${this.config.YOUTUBE_FADE_IN_TIME / 1000}s ease`;
+
+		const content = document.createElement('div');
+		content.style.display = 'flex';
+		content.style.flexDirection = 'column';
+		content.style.alignItems = 'center';
+		content.style.padding = `160px ${margin}px ${margin}px`;
+		content.style.boxSizing = 'border-box';
+		content.style.minHeight = '100%';
+
+		const videoWrapper = document.createElement('div');
+		videoWrapper.style.width = '100%';
+		videoWrapper.style.maxWidth = (vw - margin * 2) + 'px';
+		videoWrapper.style.boxShadow = '0 0 50px rgba(0, 0, 0, 0.5)';
+
+		const video = document.createElement('video');
+		video.src = 'assets/visual/simon/Arduino Simon.mp4';
+		video.controls = true;
+		video.playsInline = true;
+		video.autoplay = true;
+		video.muted = true;
+		video.style.display = 'block';
+		video.style.width = '100%';
+		video.style.maxHeight = (vh - margin * 2) + 'px';
+
+		videoWrapper.appendChild(video);
+
+		const description = document.createElement('div');
+		description.style.fontFamily = 'Courier New';
+		description.style.fontSize = '16px';
+		description.style.color = 'white';
+		description.style.lineHeight = '1.7';
+		description.style.marginBottom = '40px';
+		description.style.width = '100%';
+		description.style.maxWidth = '800px';
+		description.innerHTML = `<p style="margin:0">one of my first arduino projects exploring primitive i/o hardware through a state-based interactive game. includes custom sound and visual design for 4 difficulty levels, some of which feature timing components and generative elements.</p>`;
+
+		content.appendChild(description);
+		content.appendChild(videoWrapper);
+		overlay.appendChild(content);
+		document.body.appendChild(overlay);
+
+		setTimeout(() => { overlay.style.opacity = '1'; }, 50);
+		this._simonOverlay = overlay;
+	}
+
+	/**
+	 * Deactivate Simon mode and clean up
+	 */
+	deactivateSimonMode() {
+		if (!this._simonOverlay) return;
+		const overlay = this._simonOverlay;
+		const video = overlay.querySelector('video');
+		if (video) video.pause();
+		overlay.style.transition = `opacity ${this.config.YOUTUBE_FADE_OUT_TIME / 1000}s ease`;
+		overlay.style.opacity = '0';
+		setTimeout(() => { overlay.remove(); }, this.config.YOUTUBE_FADE_OUT_TIME);
+		this._simonOverlay = null;
+	}
+
+	/**
 	 * Remove audio player and UI
 	 */
 	removeAudioPlayer() {

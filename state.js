@@ -97,7 +97,7 @@ window.appState = {
   },
 
   // Portfolio configuration
-  portfolioItems: ['multicapo', 'pulling strings', 'music', 'singing bowl', 'pachinko', 'space charmer', 'temp-o-whirl', 'maestro', 'muni', 'dynamic tv backlight', 'rhodes'],
+  portfolioItems: ['multicapo', 'pulling strings', 'music', 'singing bowl', 'pachinko', 'space charmer', 'temp-o-whirl', 'maestro', 'muni', 'simon', 'dynamic tv backlight', 'rhodes'],
 
   portfolioSections: {
     'music': ['the vault', 'the friars', 'ummgc', 'reference section'],
