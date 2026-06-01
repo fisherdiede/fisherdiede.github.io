@@ -250,6 +250,276 @@ class MediaController {
 		this._ggrChartsOverlay = null;
 	}
 
+	activateYellowRosesStemsMode() {
+		const TRACKS = [
+			{ name: 'bass',    file: 'bass.m4a',              color: '#FF6600' },
+			{ name: 'drums',   file: 'drums and cymbals.m4a', color: '#FFE600' },
+			{ name: 'guitar',  file: 'guitar.m4a',            color: '#AA00FF' },
+			{ name: 'rhodes',  file: 'rhodes.m4a',            color: '#0099FF' },
+			{ name: 'visuals', file: 'visuals.m4a',           color: '#FF0000' },
+			{ name: 'vox A',   file: 'vox A.m4a',            color: '#00E600' },
+			{ name: 'vox B',   file: 'vox B.m4a',            color: '#FF69B4' },
+		];
+
+		const BASE_PATH = 'assets/audio/' +
+			encodeURIComponent('reference section') + '/' +
+			encodeURIComponent('yellow roses stems') + '/';
+
+		const MIXER_HEIGHT = 130;
+
+		// FFT canvas — below menu (z 99), own background so nothing bleeds through
+		const canvas = document.createElement('canvas');
+		Object.assign(canvas.style, {
+			position: 'fixed', top: '0', left: '0', width: '100%',
+			height: `calc(100% - ${MIXER_HEIGHT}px)`,
+			zIndex: '99', display: 'block',
+			opacity: '0', transition: 'opacity 0.4s ease', pointerEvents: 'none',
+		});
+
+		// Loading label — below menu (z 99)
+		const loadingLabel = document.createElement('div');
+		Object.assign(loadingLabel.style, {
+			position: 'fixed', top: '50%', left: '50%',
+			transform: 'translate(-50%, -50%)',
+			zIndex: '99', color: 'rgba(255,255,255,0.35)', fontSize: '11px',
+			letterSpacing: '0.15em', textTransform: 'uppercase',
+			fontFamily: 'monospace', pointerEvents: 'none',
+			opacity: '0', transition: 'opacity 0.4s ease',
+		});
+		loadingLabel.textContent = `loading 0 / ${TRACKS.length}`;
+
+		// Mixer bar — above menu (z 110)
+		const mixerBar = document.createElement('div');
+		Object.assign(mixerBar.style, {
+			position: 'fixed', bottom: '0', left: '0', width: '100%',
+			height: `${MIXER_HEIGHT}px`, zIndex: '110',
+			display: 'flex', flexDirection: 'row',
+			background: '#0f0f0f', borderTop: '1px solid #1a1a1a', fontFamily: 'monospace',
+			opacity: '0', transition: 'opacity 0.4s ease',
+		});
+
+		document.body.appendChild(canvas);
+		document.body.appendChild(loadingLabel);
+		document.body.appendChild(mixerBar);
+		requestAnimationFrame(() => {
+			canvas.style.opacity = '1';
+			loadingLabel.style.opacity = '1';
+			mixerBar.style.opacity = '1';
+		});
+
+		const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+		const gainNodes = [];
+		const analysers = [];
+		const dataArrays = [];
+
+		TRACKS.forEach((track) => {
+			const gainNode = audioCtx.createGain();
+			gainNode.gain.value = 1.0;
+			const analyser = audioCtx.createAnalyser();
+			analyser.fftSize = 4096;
+			analyser.smoothingTimeConstant = 0.8;
+			gainNode.connect(analyser);
+			analyser.connect(audioCtx.destination);
+			gainNodes.push(gainNode);
+			analysers.push(analyser);
+			dataArrays.push(new Uint8Array(analyser.frequencyBinCount));
+
+			const channel = document.createElement('div');
+			Object.assign(channel.style, {
+				flex: '1', display: 'flex', flexDirection: 'column', alignItems: 'center',
+				padding: '10px 6px 8px', borderRight: '1px solid #1a1a1a',
+				minWidth: '0', boxSizing: 'border-box',
+			});
+
+			const strip = document.createElement('div');
+			Object.assign(strip.style, {
+				width: '100%', height: '3px', background: track.color,
+				borderRadius: '2px', marginBottom: '6px', flexShrink: '0',
+			});
+
+			const label = document.createElement('div');
+			label.textContent = track.name;
+			Object.assign(label.style, {
+				color: track.color, fontSize: '9px', textTransform: 'uppercase',
+				letterSpacing: '0.08em', marginBottom: '8px', textAlign: 'center',
+				overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+				width: '100%', flexShrink: '0',
+			});
+
+			const sliderOuter = document.createElement('div');
+			Object.assign(sliderOuter.style, {
+				flex: '1', display: 'flex', alignItems: 'center', justifyContent: 'center',
+				width: '100%',
+			});
+
+			const slider = document.createElement('input');
+			slider.type = 'range';
+			slider.min = '0'; slider.max = '1'; slider.step = '0.01'; slider.value = '1';
+			Object.assign(slider.style, {
+				transform: 'rotate(-90deg)',
+				width: '60px',
+				cursor: 'pointer', accentColor: track.color, margin: '0', padding: '0',
+				display: 'block', flexShrink: '0',
+			});
+			slider.addEventListener('input', () => { gainNode.gain.value = parseFloat(slider.value); });
+
+			sliderOuter.appendChild(slider);
+			channel.appendChild(strip);
+			channel.appendChild(label);
+			channel.appendChild(sliderOuter);
+			mixerBar.appendChild(channel);
+		});
+
+		const dpr = window.devicePixelRatio || 1;
+		const TRAIL_LENGTH = 28;
+		const fftHistory = [];
+
+		const resizeCanvas = () => {
+			canvas.width = window.innerWidth * dpr;
+			canvas.height = (window.innerHeight - MIXER_HEIGHT) * dpr;
+		};
+		resizeCanvas();
+		window.addEventListener('resize', resizeCanvas);
+
+		const ctx2d = canvas.getContext('2d');
+		const animRef = { id: null };
+		const MIN_FREQ = 20;
+		const MAX_FREQ = 20000;
+
+		const drawFFT = () => {
+			animRef.id = requestAnimationFrame(drawFFT);
+			const W = canvas.width;
+			const H = canvas.height;
+			const logRange = Math.log(MAX_FREQ / MIN_FREQ);
+			const nyquist = audioCtx.sampleRate / 2;
+
+			// Capture current FFT snapshot with pre-computed points
+			const snap = TRACKS.map((_, i) => {
+				const data = new Uint8Array(dataArrays[i].length);
+				analysers[i].getByteFrequencyData(data);
+				const vol = gainNodes[i].gain.value;
+				const pts = [];
+				let lastX = -1;
+				for (let bin = 1; bin < data.length; bin++) {
+					const freq = (bin / data.length) * nyquist;
+					if (freq < MIN_FREQ) continue;
+					if (freq > MAX_FREQ) break;
+					const x = (Math.log(freq / MIN_FREQ) / logRange) * W;
+					if (x - lastX < 1) continue;
+					lastX = x;
+					pts.push([x, H - (data[bin] / 255) * vol * H * 0.95 - 2]);
+				}
+				return pts;
+			});
+			fftHistory.push(snap);
+			if (fftHistory.length > TRAIL_LENGTH) fftHistory.shift();
+
+			// Pure black background every frame — no residue possible
+			ctx2d.globalCompositeOperation = 'source-over';
+			ctx2d.globalAlpha = 1;
+			ctx2d.fillStyle = '#000';
+			ctx2d.fillRect(0, 0, W, H);
+
+			// Draw each historical frame, newest on top
+			ctx2d.lineWidth = 2 * dpr;
+			fftHistory.forEach((snapshot, histIdx) => {
+				const age = fftHistory.length - 1 - histIdx;
+				const alpha = (1 - age / TRAIL_LENGTH) * 0.85;
+				if (alpha < 0.005) return;
+
+				snapshot.forEach((pts, i) => {
+					if (pts.length < 2) return;
+					ctx2d.strokeStyle = TRACKS[i].color;
+					ctx2d.globalAlpha = alpha;
+					ctx2d.beginPath();
+					ctx2d.moveTo(pts[0][0], pts[0][1]);
+					for (let j = 1; j < pts.length - 1; j++) {
+						ctx2d.quadraticCurveTo(pts[j][0], pts[j][1], (pts[j][0] + pts[j + 1][0]) / 2, (pts[j][1] + pts[j + 1][1]) / 2);
+					}
+					ctx2d.lineTo(pts[pts.length - 1][0], pts[pts.length - 1][1]);
+					ctx2d.stroke();
+				});
+			});
+
+			ctx2d.globalAlpha = 1;
+		};
+
+		let loadedCount = 0;
+		audioCtx.resume().then(() => {
+			Promise.all(TRACKS.map((track, i) =>
+				fetch(BASE_PATH + encodeURIComponent(track.file))
+					.then(r => r.arrayBuffer())
+					.then(buf => audioCtx.decodeAudioData(buf))
+					.then(audioBuffer => {
+						loadedCount++;
+						loadingLabel.textContent = `loading ${loadedCount} / ${TRACKS.length}`;
+						return { audioBuffer, index: i };
+					})
+			)).then(loaded => {
+				loadingLabel.remove();
+				const commonDuration = Math.min(...loaded.map(({ audioBuffer }) => audioBuffer.duration));
+				const startTime = audioCtx.currentTime + 0.05;
+				const sources = [];
+				loaded.forEach(({ audioBuffer, index }) => {
+					const source = audioCtx.createBufferSource();
+					source.buffer = audioBuffer;
+					source.loop = true;
+					source.loopEnd = commonDuration;
+					source.connect(gainNodes[index]);
+					source.start(startTime);
+					sources.push(source);
+				});
+				this._yellowRosesStemsSourceNodes = sources;
+				drawFFT();
+			}).catch(err => {
+				loadingLabel.textContent = 'error loading audio';
+				console.error('Yellow Roses Stems load error:', err);
+			});
+		});
+
+		this._yellowRosesStemsCanvas = canvas;
+		this._yellowRosesStemsMixerBar = mixerBar;
+		this._yellowRosesStemsAudioCtx = audioCtx;
+		this._yellowRosesStemsGainNodes = gainNodes;
+		this._yellowRosesStemsSourceNodes = [];
+		this._yellowRosesStemsAnimRef = animRef;
+		this._yellowRosesStemsResizeHandler = resizeCanvas;
+	}
+
+	deactivateYellowRosesStemsMode() {
+		if (!this._yellowRosesStemsCanvas) return;
+
+		if (this._yellowRosesStemsAnimRef) {
+			cancelAnimationFrame(this._yellowRosesStemsAnimRef.id);
+			this._yellowRosesStemsAnimRef = null;
+		}
+
+		if (this._yellowRosesStemsSourceNodes) {
+			this._yellowRosesStemsSourceNodes.forEach(source => { try { source.stop(); } catch (e) {} });
+			this._yellowRosesStemsSourceNodes = null;
+		}
+
+		if (this._yellowRosesStemsAudioCtx) {
+			this._yellowRosesStemsAudioCtx.close();
+			this._yellowRosesStemsAudioCtx = null;
+		}
+
+		if (this._yellowRosesStemsResizeHandler) {
+			window.removeEventListener('resize', this._yellowRosesStemsResizeHandler);
+			this._yellowRosesStemsResizeHandler = null;
+		}
+
+		[this._yellowRosesStemsCanvas, this._yellowRosesStemsMixerBar].forEach(el => {
+			if (!el) return;
+			el.style.transition = 'opacity 0.4s ease';
+			el.style.opacity = '0';
+			setTimeout(() => { el.remove(); }, 400);
+		});
+		this._yellowRosesStemsCanvas = null;
+		this._yellowRosesStemsMixerBar = null;
+		this._yellowRosesStemsGainNodes = null;
+	}
+
 	/**
 	 * Deactivate MUNI mode and clean up
 	 */

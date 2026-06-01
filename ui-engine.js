@@ -995,6 +995,10 @@ class UIEngine {
 			this.mediaController.deactivateGGRChartsMode();
 		}
 
+		if (closingEntry.itemName === 'yellow roses stems') {
+			this.mediaController.deactivateYellowRosesStemsMode();
+		}
+
 		if (closingEntry.itemName === 'simon') {
 			this.mediaController.deactivateSimonMode();
 		}
@@ -1166,7 +1170,7 @@ class UIEngine {
 				}
 			}
 
-			const isActionable = hasSubmenu || subItem === 'biebl' || subItem === '7LW' || subItem === 'GGR charts' || isVaultSong;
+			const isActionable = hasSubmenu || subItem === 'biebl' || subItem === '7LW' || subItem === 'GGR charts' || subItem === 'yellow roses stems' || isVaultSong;
 			const adsr = isActionable ? this.config.ADSR_PORTFOLIO : this.config.ADSR_TAB;
 
 			// Use stored audio config from hover if available
@@ -1199,6 +1203,14 @@ class UIEngine {
 			if (subItem === 'GGR charts') {
 				this._openPortfolioSection(subItem, audioConfig, true); // true = isNullMenu
 				this.mediaController.activateGGRChartsMode();
+				this._resetMenuAutoHideTimer();
+				return;
+			}
+
+			// Check if this is "yellow roses stems" - open fullscreen stem mixer + FFT
+			if (subItem === 'yellow roses stems') {
+				this._openPortfolioSection(subItem, audioConfig, true);
+				this.mediaController.activateYellowRosesStemsMode();
 				this._resetMenuAutoHideTimer();
 				return;
 			}
@@ -1298,7 +1310,7 @@ class UIEngine {
 			}
 
 			// Actionable items open submenus or trigger special modes (biebl, 7LW, vault songs)
-			const isActionable = hasSubmenu || itemName === 'biebl' || itemName === '7LW' || itemName === 'muni' || itemName === 'GGR charts' || itemName === 'simon' || isVaultSong;
+			const isActionable = hasSubmenu || itemName === 'biebl' || itemName === '7LW' || itemName === 'muni' || itemName === 'GGR charts' || itemName === 'yellow roses stems' || itemName === 'simon' || isVaultSong;
 			const adsr = isActionable ? this.config.ADSR_PORTFOLIO : this.config.ADSR_TAB;
 
 			// Get audio config for this depth
@@ -1590,6 +1602,7 @@ class UIEngine {
 		// Deactivate any bespoke fullscreen modes
 		this.mediaController.deactivateGGRChartsMode();
 		this.mediaController.deactivateSimonMode();
+		this.mediaController.deactivateYellowRosesStemsMode();
 	}
 
 	/**

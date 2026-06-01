@@ -105,6 +105,6 @@ window.appState = {
     'ummgc': ['7LW'],
     'the vault': ['08112025'],
     '08112025': ['gravity well', 'monochrome glow', 'hatchet', 'secrets out', 'hbd', 'better', 'watercolor pictures', 'look out', 'headshots (44)', 'ex toy (666)', 'no more', 'whole wide world', 'everlasting'],
-    'reference section': ['GGR charts']
+    'reference section': ['GGR charts', 'yellow roses stems']
   }
 };
